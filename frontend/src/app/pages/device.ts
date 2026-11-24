@@ -15,6 +15,9 @@ interface Line {
   cls: string;
 }
 
+interface TraceHop { ttl: number; ip: string | null; name: string | null; rtt_ms: number | null }
+interface Trace { host: string; dest: string | null; hops: TraceHop[]; reached: boolean; error?: string; time: number }
+
 interface Reliability {
   window_days: number;
   availability: number;
@@ -227,6 +230,47 @@ interface Reliability {
               </table>
               <p class="muted">Downtime incidents come from the health watcher; percentiles are computed by Prometheus.</p>
             } @else { <clr-progress-bar [clrLoop]="true"></clr-progress-bar> }
+
+            <div class="disc-head">
+              <h4>Path <span class="muted">· traceroute</span></h4>
+              <button class="btn btn-sm btn-outline disc-btn" [disabled]="tracing()" (click)="runTrace()">
+                <cds-icon shape="network-globe"></cds-icon> {{ tracing() ? 'Tracing…' : 'Trace route' }}
+              </button>
+            </div>
+            <p class="muted">The hops between NetOps and this device, with per-hop latency — so you can see <em>where</em>
+              on the path delay sits, not just whether it answers.</p>
+            @if (trace(); as t) {
+              @if (t.error) {
+                <clr-alert clrAlertType="danger" [clrAlertClosable]="false" clrAlertSize="sm">
+                  <clr-alert-item><span class="alert-text">{{ t.error }}</span></clr-alert-item></clr-alert>
+              } @else {
+                <table class="table table-compact trace">
+                  <thead><tr><th>#</th><th class="left">Hop</th><th class="left">Latency</th></tr></thead>
+                  <tbody>
+                    @for (h of t.hops; track h.ttl) {
+                      <tr>
+                        <td>{{ h.ttl }}</td>
+                        <td class="left">
+                          @if (h.ip) {
+                            <span class="mono">{{ h.ip }}</span>
+                            @if (h.name) { <span class="label label-info">{{ h.name }}</span> }
+                            @else if (h.ttl === 1) { <span class="muted sub gw">NetOps host gateway</span> }
+                          } @else { <span class="muted">* no reply</span> }
+                        </td>
+                        <td class="left">
+                          @if (h.rtt_ms !== null) {
+                            <div class="lat"><span class="lat-bar" [style.width.%]="latPct(h.rtt_ms)"></span></div>
+                            <span class="mono sub">{{ h.rtt_ms }} ms</span>
+                          } @else { <span class="muted">–</span> }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+                <p class="muted sm">{{ t.reached ? 'Reached ' + t.host : 'Did not reach ' + t.host + ' within ' + t.hops.length + ' hops' }}
+                  · probed {{ t.time | ago }}.</p>
+              }
+            }
           </clr-tab-content>
         </clr-tab>
 
@@ -370,6 +414,11 @@ interface Reliability {
     .cmd { background: var(--clr-color-neutral-100, #f3f3f3); border-radius: 4px; padding: 0.5rem 0.7rem;
       font-size: 0.74rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
     .sm { font-size: 0.78rem; }
+    .table.trace td, .table.trace th { vertical-align: middle; }
+    .lat { width: 90px; height: 6px; border-radius: 3px; background: var(--clr-color-neutral-300, #e0e0e0); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 0.4rem; }
+    .lat-bar { display: block; height: 100%; background: #0079ad; }
+    .trace .gw { margin-left: 0.45rem; }
+    .sub { font-size: 0.72rem; opacity: 0.7; }
     .tl { list-style: none; padding: 0; margin: 0; }
     .tl-item { display: flex; gap: 0.6rem; align-items: baseline; padding: 0.4rem 0; border-bottom: 1px solid var(--clr-color-neutral-300, #e0e0e0); }
     .tl-title { font-weight: 600; }
@@ -386,6 +435,8 @@ export class DevicePage implements OnInit {
   protected device = signal<Device | null>(null);
   protected timeline = signal<TimelineEvent[]>([]);
   protected reliability = signal<Reliability | null>(null);
+  protected trace = signal<Trace | null>(null);
+  protected tracing = signal(false);
   protected versions = signal<BackupVersion[]>([]);
   protected lines = signal<Line[]>([]);
   protected showDiff = signal(false);
@@ -470,6 +521,21 @@ export class DevicePage implements OnInit {
       next: () => this.loadCreds(),
       error: () => this.message.set({ type: 'danger', text: 'Could not clear the credential.' }),
     });
+  }
+
+  /** Trace the network path to this device. */
+  protected runTrace(): void {
+    this.tracing.set(true);
+    this.http.post<Trace>(`/api/devices/${this.id()}/traceroute`, {}).subscribe({
+      next: (t) => { this.trace.set(t); this.tracing.set(false); },
+      error: (e) => { this.tracing.set(false); this.message.set({ type: 'danger', text: e.error?.detail ?? 'Traceroute failed.' }); },
+    });
+  }
+
+  /** Bar width for a hop, relative to the slowest hop in this trace. */
+  protected latPct(rtt: number): number {
+    const max = Math.max(1, ...(this.trace()?.hops ?? []).map((h) => h.rtt_ms ?? 0));
+    return Math.min(100, Math.round((rtt / max) * 100));
   }
 
   /** Run a hardware/firmware probe now and show the result. */

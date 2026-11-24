@@ -5,6 +5,7 @@ export const routes: Routes = [
   { path: 'login', title: 'Log in · NetOps', loadComponent: () => import('./pages/login').then((m) => m.LoginPage) },
   { path: 'setup', title: 'Set up · NetOps', loadComponent: () => import('./pages/setup').then((m) => m.SetupPage) },
   { path: 'enroll', title: 'Second factor · NetOps', loadComponent: () => import('./pages/setup').then((m) => m.EnrollPage) },
+  { path: 'k/:token', title: 'Status', loadComponent: () => import('./pages/kiosk').then((m) => m.KioskPage) },
   {
     path: '',
     canActivateChild: [authGuard],

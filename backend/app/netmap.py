@@ -90,6 +90,47 @@ def load() -> dict:
     return json.loads(GRAPH.read_text()) if GRAPH.is_file() else {"time": None, "nodes": [], "links": []}
 
 
+# Manual interface assignments, for devices whose physical port the router topology couldn't tell us (vault
+# locked, a dumb switch in between, a static-IP device with no DHCP lease). {device_id: "ether3"}.
+_IFACES = DIR / "interfaces.json"
+_COMMON_IFACES = ["ether1", "ether2", "ether3", "ether4", "ether5", "sfp1",
+                  "wifi1", "wifi2", "wlan1", "wlan2", "bridge"]
+
+
+def iface_overrides() -> dict[str, str]:
+    try:
+        return json.loads(_IFACES.read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def set_interface(device_id: str, iface: str | None) -> None:
+    """Assign (or, with iface None/"" , clear) a device's physical interface manually."""
+    ov = iface_overrides()
+    if iface:
+        ov[device_id] = iface.strip()
+    else:
+        ov.pop(device_id, None)
+    DIR.mkdir(parents=True, exist_ok=True)
+    tmp = _IFACES.with_suffix(".tmp")
+    tmp.write_text(json.dumps(ov, indent=1))
+    tmp.replace(_IFACES)
+
+
+def view() -> dict:
+    """The stored graph with manual interface assignments overlaid, plus interface suggestions for editing.
+    Overlaying at read time means an edit shows up immediately, without re-running a router scan."""
+    g = load()
+    ov = iface_overrides()
+    for n in g.get("nodes", []):
+        if n.get("category") in ("device", "unknown") and n.get("device_id") in ov:
+            n["port"] = ov[n["device_id"]]
+            n["port_manual"] = True
+    ports = {n["port"] for n in g.get("nodes", []) if n.get("port")} | set(ov.values())
+    g["iface_options"] = sorted(ports | set(_COMMON_IFACES))
+    return g
+
+
 async def build() -> dict:
     DIR.mkdir(parents=True, exist_ok=True)
     devices = inventory.load()

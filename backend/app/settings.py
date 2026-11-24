@@ -19,6 +19,7 @@ NTFY_TOKEN = os.environ.get("NTFY_TOKEN", "")
 # --- Added features ---------------------------------------------------------------------------------
 # Certificate / expiry monitoring (feature 3)
 CERT_WARN_DAYS = int(os.environ.get("CERT_WARN_DAYS", "21"))
+HIBP_API_KEY = os.environ.get("HIBP_API_KEY", "")   # Have I Been Pwned: email/domain breach lookup (optional, paid)
 CERT_SCAN_TIME = os.environ.get("CERT_SCAN_TIME", "04:10")
 
 # Firmware / OS end-of-life (feature 4). endoflife.date, cached locally; no device data leaves the box.

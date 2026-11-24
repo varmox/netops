@@ -58,68 +58,100 @@
 
     <div class="content-container">
       <clr-vertical-nav [clrVerticalNavCollapsible]="true" [(clrVerticalNavCollapsed)]="navCollapsed">
-        <a clrVerticalNavLink routerLink="/dashboard" routerLinkActive="active">
-          <cds-icon clrVerticalNavIcon shape="dashboard"></cds-icon> Dashboard
-        </a>
-        <a clrVerticalNavLink routerLink="/devices" routerLinkActive="active">
-          <cds-icon clrVerticalNavIcon shape="router"></cds-icon> Devices
-          @if (down().length) { <span class="badge badge-danger">{{ down().length }}</span> }
-        </a>
-        @if (feat('backups')) {
-          <a clrVerticalNavLink routerLink="/backups" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="backup"></cds-icon> Backups
-          </a>
+        <!-- Infrastructure: the devices and network services you manage -->
+        <clr-vertical-nav-group [(clrVerticalNavGroupExpanded)]="navGroups.infra">
+          <cds-icon clrVerticalNavIcon shape="router"></cds-icon>
+          Infrastructure
+          <clr-vertical-nav-group-children>
+            <a clrVerticalNavLink routerLink="/devices" routerLinkActive="active">
+              <cds-icon clrVerticalNavIcon shape="router"></cds-icon> Devices
+              @if (down().length) { <span class="badge badge-danger">{{ down().length }}</span> }
+            </a>
+            @if (feat('backups')) {
+              <a clrVerticalNavLink routerLink="/backups" routerLinkActive="active">
+                <cds-icon clrVerticalNavIcon shape="backup"></cds-icon> Backups
+              </a>
+            }
+            @if (feat('map')) {
+              <a clrVerticalNavLink routerLink="/map" routerLinkActive="active">
+                <cds-icon clrVerticalNavIcon shape="network-globe"></cds-icon> Map
+              </a>
+            }
+            @if (feat('wifi')) {
+              <a clrVerticalNavLink routerLink="/wifi" routerLinkActive="active">
+                <cds-icon clrVerticalNavIcon shape="wifi"></cds-icon> Wi-Fi
+              </a>
+            }
+          </clr-vertical-nav-group-children>
+        </clr-vertical-nav-group>
+
+        <!-- Monitoring: health, events and metrics -->
+        <clr-vertical-nav-group [(clrVerticalNavGroupExpanded)]="navGroups.monitoring">
+          <cds-icon clrVerticalNavIcon shape="line-chart"></cds-icon>
+          Monitoring
+          <clr-vertical-nav-group-children>
+            <a clrVerticalNavLink routerLink="/dashboard" routerLinkActive="active">
+              <cds-icon clrVerticalNavIcon shape="dashboard"></cds-icon> Dashboard
+            </a>
+            <a clrVerticalNavLink routerLink="/alerts" routerLinkActive="active" (click)="alerts.markSeen()">
+              <cds-icon clrVerticalNavIcon shape="bell"></cds-icon> Alerts
+              @if (alerts.unseen()) { <span class="badge badge-danger">{{ alerts.unseen() }}</span> }
+            </a>
+            @if (feat('timeline')) {
+              <a clrVerticalNavLink routerLink="/timeline" routerLinkActive="active">
+                <cds-icon clrVerticalNavIcon shape="clock"></cds-icon> Timeline
+              </a>
+            }
+            @if (feat('metrics')) {
+              <a clrVerticalNavLink routerLink="/metrics" routerLinkActive="active">
+                <cds-icon clrVerticalNavIcon shape="line-chart"></cds-icon> Metrics
+              </a>
+            }
+            <a clrVerticalNavLink routerLink="/family" routerLinkActive="active">
+              <cds-icon clrVerticalNavIcon shape="home"></cds-icon> Family view
+            </a>
+          </clr-vertical-nav-group-children>
+        </clr-vertical-nav-group>
+
+        <!-- Security: threats, posture and DNS filtering -->
+        @if (feat('security') || postureOn() || feat('dns')) {
+          <clr-vertical-nav-group [(clrVerticalNavGroupExpanded)]="navGroups.security">
+            <cds-icon clrVerticalNavIcon shape="shield"></cds-icon>
+            Security
+            <clr-vertical-nav-group-children>
+              @if (feat('security')) {
+                <a clrVerticalNavLink routerLink="/security" routerLinkActive="active">
+                  <cds-icon clrVerticalNavIcon shape="shield"></cds-icon> Threats
+                  @if (criticalFindings()) { <span class="badge badge-danger">{{ criticalFindings() }}</span> }
+                </a>
+              }
+              @if (postureOn()) {
+                <a clrVerticalNavLink routerLink="/posture" routerLinkActive="active">
+                  <cds-icon clrVerticalNavIcon shape="certificate"></cds-icon> Posture
+                </a>
+              }
+              @if (feat('dns')) {
+                <a clrVerticalNavLink routerLink="/dns" routerLinkActive="active">
+                  <cds-icon clrVerticalNavIcon shape="block"></cds-icon> DNS filtering
+                </a>
+              }
+            </clr-vertical-nav-group-children>
+          </clr-vertical-nav-group>
         }
-        <a clrVerticalNavLink routerLink="/alerts" routerLinkActive="active" (click)="alerts.markSeen()">
-          <cds-icon clrVerticalNavIcon shape="bell"></cds-icon> Alerts
-          @if (alerts.unseen()) { <span class="badge badge-danger">{{ alerts.unseen() }}</span> }
-        </a>
-        @if (feat('security')) {
-          <a clrVerticalNavLink routerLink="/security" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="shield"></cds-icon> Security
-            @if (criticalFindings()) { <span class="badge badge-danger">{{ criticalFindings() }}</span> }
-          </a>
-        }
-        @if (postureOn()) {
-          <a clrVerticalNavLink routerLink="/posture" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="certificate"></cds-icon> Posture
-          </a>
-        }
-        @if (feat('dns')) {
-          <a clrVerticalNavLink routerLink="/dns" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="block"></cds-icon> DNS
-          </a>
-        }
-        @if (feat('timeline')) {
-          <a clrVerticalNavLink routerLink="/timeline" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="clock"></cds-icon> Timeline
-          </a>
-        }
-        @if (feat('map')) {
-          <a clrVerticalNavLink routerLink="/map" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="network-globe"></cds-icon> Map
-          </a>
-        }
-        @if (feat('wifi')) {
-          <a clrVerticalNavLink routerLink="/wifi" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="wifi"></cds-icon> Wi-Fi
-          </a>
-        }
-        @if (feat('metrics')) {
-          <a clrVerticalNavLink routerLink="/metrics" routerLinkActive="active">
-            <cds-icon clrVerticalNavIcon shape="line-chart"></cds-icon> Metrics
-          </a>
-        }
-        <div class="nav-divider"></div>
-        <a clrVerticalNavLink routerLink="/family" routerLinkActive="active">
-          <cds-icon clrVerticalNavIcon shape="home"></cds-icon> Family view
-        </a>
-        <a clrVerticalNavLink routerLink="/features" routerLinkActive="active">
-          <cds-icon clrVerticalNavIcon shape="switch"></cds-icon> Features
-        </a>
-        <a clrVerticalNavLink routerLink="/settings" routerLinkActive="active">
-          <cds-icon clrVerticalNavIcon shape="cog"></cds-icon> Settings
-        </a>
+
+        <!-- Settings -->
+        <clr-vertical-nav-group [(clrVerticalNavGroupExpanded)]="navGroups.settings">
+          <cds-icon clrVerticalNavIcon shape="cog"></cds-icon>
+          Settings
+          <clr-vertical-nav-group-children>
+            <a clrVerticalNavLink routerLink="/features" routerLinkActive="active">
+              <cds-icon clrVerticalNavIcon shape="switch"></cds-icon> Features
+            </a>
+            <a clrVerticalNavLink routerLink="/settings" routerLinkActive="active">
+              <cds-icon clrVerticalNavIcon shape="cog"></cds-icon> Settings
+            </a>
+          </clr-vertical-nav-group-children>
+        </clr-vertical-nav-group>
       </clr-vertical-nav>
 
       <main class="content-area">

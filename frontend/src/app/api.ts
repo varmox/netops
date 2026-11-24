@@ -80,6 +80,8 @@ export interface Discovery {
   vault_locked?: boolean;
 }
 
+export interface KioskLink { enabled: boolean; token: string | null; created: number | null; path: string | null }
+
 export interface CredSlot { slot: string; name: string; set: boolean; referenced: boolean }
 export interface DeviceCredentials {
   vault: { initialized: boolean; unlocked: boolean };
@@ -163,6 +165,16 @@ export class Api {
   }
   clearCredential(id: string, slot: string): Observable<{ ok: boolean }> {
     return this.http.delete<{ ok: boolean }>(`/api/devices/${id}/credentials/${slot}`);
+  }
+  /** Kiosk / family-display share link (admin). */
+  kiosk(): Observable<KioskLink> {
+    return this.http.get<KioskLink>('/api/kiosk');
+  }
+  kioskRotate(): Observable<KioskLink> {
+    return this.http.post<KioskLink>('/api/kiosk/rotate', {});
+  }
+  kioskDisable(): Observable<KioskLink> {
+    return this.http.post<KioskLink>('/api/kiosk/disable', {});
   }
   /** Last hardware/firmware probe for a device. */
   discovery(id: string): Observable<Discovery> {

@@ -48,6 +48,8 @@ REGISTRY: list[Feature] = [
             nav={"route": "/posture", "label": "Posture", "icon": "world"}),
     Feature("honeypot", "Honeypot", "Fake Telnet/SMB/RDP/ADB services; any LAN connection alerts.", "active",
             env="HONEYPOT_ENABLED", nav={"route": "/posture", "label": "Posture", "icon": "bug"}),
+    Feature("hibp", "Have I Been Pwned", "Breach check for stored credentials (keyless) and emails (needs a HIBP API key).",
+            "watch", default=False, nav={"route": "/posture", "label": "Posture", "icon": "shield"}),
     Feature("credcheck", "Default-password audit", "Checks your devices for factory logins (LAN-only, opt-in).",
             "active", default=False, env="CREDCHECK_ENABLED",
             nav={"route": "/posture", "label": "Posture", "icon": "key"}),

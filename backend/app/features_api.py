@@ -8,8 +8,8 @@ import asyncssh
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from . import (auth, certs, credcheck, discovery, dns, exposure, features, honeypot, inventory,
-               lifecycle, netmap, reliability, report, settings, timeline, vault, wifi)
+from . import (auth, certs, credcheck, discovery, dns, exposure, features, hibp, honeypot, inventory,
+               kiosk, lifecycle, netmap, reliability, report, settings, timeline, traceroute, vault, wifi)
 
 router = APIRouter(prefix="/api")
 log = logging.getLogger("netops.features")
@@ -145,6 +145,49 @@ async def honeypot_state():
     return {"summary": honeypot.summary(), "hits": honeypot.hits(200)}
 
 
+# ---------------------------------------------------------------- Have I Been Pwned
+
+class HibpPassword(BaseModel):
+    prefix: str          # first 5 hex chars of the password's SHA-1 (the browser computes the hash)
+    suffix: str          # the remaining 35 hex chars
+
+
+class HibpAccount(BaseModel):
+    email: str
+
+
+@router.get("/hibp")
+async def hibp_status():
+    return {"enabled": features.enabled("hibp"), **hibp.status()}
+
+
+@router.post("/hibp/password")
+async def hibp_password(body: HibpPassword):
+    if not features.enabled("hibp"):
+        raise HTTPException(400, "The Have I Been Pwned feature is off.")
+    try:
+        count = await hibp.password_count(body.prefix, body.suffix)
+    except Exception as e:                           # noqa: BLE001
+        raise HTTPException(502, "HIBP lookup failed: %s" % e)
+    return {"count": count, "breached": count > 0}
+
+
+@router.post("/hibp/audit")
+async def hibp_audit():
+    if not features.enabled("hibp"):
+        raise HTTPException(400, "The Have I Been Pwned feature is off.")
+    return await hibp.audit_stored()
+
+
+@router.post("/hibp/account")
+async def hibp_account(body: HibpAccount):
+    if not features.enabled("hibp"):
+        raise HTTPException(400, "The Have I Been Pwned feature is off.")
+    if "@" not in body.email:
+        raise HTTPException(400, "Enter an email address.")
+    return await hibp.account_breaches(body.email.strip())
+
+
 # ---------------------------------------------------------------- credential audit (feature 5)
 
 @router.get("/credcheck")
@@ -176,7 +219,21 @@ async def credcheck_run(body: CredAudit, request: Request):
 
 @router.get("/netmap")
 async def netmap_get():
-    return netmap.load()
+    return netmap.view()
+
+
+class IfaceAssign(BaseModel):
+    device_id: str
+    interface: str | None = None   # null/empty clears the manual assignment
+
+
+@router.post("/netmap/interface")
+async def netmap_interface(body: IfaceAssign):
+    """Manually assign a device's physical interface when the router scan couldn't tell."""
+    if not inventory.get(body.device_id):
+        raise HTTPException(404, "unknown device")
+    netmap.set_interface(body.device_id, body.interface)
+    return {"device_id": body.device_id, "interface": body.interface or None}
 
 
 @router.get("/netmap/traffic")
@@ -392,6 +449,18 @@ async def clear_credential(device_id: str, slot: str):
     return {"ok": True, "slot": slot, "set": False}
 
 
+@router.post("/devices/{device_id}/traceroute")
+async def device_traceroute(device_id: str):
+    """Trace the network path to a device — the hops between here and it, with per-hop latency."""
+    dev = inventory.get(device_id)
+    if not dev:
+        raise HTTPException(404, "unknown device")
+    try:
+        return await traceroute.trace(dev.host)
+    except Exception as e:                           # noqa: BLE001
+        raise HTTPException(502, "traceroute failed: %s" % e)
+
+
 @router.get("/devices/{device_id}/discovery")
 async def device_discovery(device_id: str):
     """The last hardware/firmware probe for a device (model, serial, CPU/RAM, OS/firmware, uptime)."""
@@ -440,23 +509,25 @@ async def report_run():
 
 # ---------------------------------------------------------------- family view (feature 12)
 
+def _family_rows() -> list[dict]:
+    from . import state
+    rows = []
+    for d in inventory.load():
+        rows.append({"name": d.name, "role": d.role or d.type, "status": state.get(d.id).status,
+                     "kind": d.type, "icon": _family_icon(d.type)})
+    return sorted(rows, key=lambda r: (r["status"] != "down", r["name"]))
+
+
 @router.get("/family")
 async def family():
     """A plain, read-only summary: what's online, nothing technical."""
-    from . import state
-    devices = inventory.load()
-    rows = []
-    for d in devices:
-        st = state.get(d.id)
-        rows.append({"name": d.name, "role": d.role or d.type, "status": st.status,
-                     "kind": d.type, "icon": _family_icon(d.type)})
-    online = sum(1 for r in rows if r["status"] == "up")
+    rows = _family_rows()
     exp = exposure.load()
     hp = honeypot.summary()
     return {
         "ok": all(r["status"] in ("up", "unknown") for r in rows) and not exp.get("exposures"),
-        "online": online, "total": len(rows),
-        "devices": sorted(rows, key=lambda r: (r["status"] != "down", r["name"])),
+        "online": sum(1 for r in rows if r["status"] == "up"), "total": len(rows),
+        "devices": rows,
         "warnings": {"exposures": len(exp.get("exposures", [])), "honeypot": hp.get("total", 0)},
     }
 
@@ -464,3 +535,48 @@ async def family():
 def _family_icon(kind: str) -> str:
     return {"mikrotik": "router", "zyxel": "router", "linux": "host", "tv": "display",
             "speaker": "volume-up", "camera": "video-camera", "phone": "mobile"}.get(kind, "devices")
+
+
+# ---------------------------------------------------------------- kiosk share link (public status display)
+#
+# A short, revocable token lets a wall display open the family/status view with no login. The public
+# endpoint lives under /api/public/ (nginx serves it without the session check) and returns ONLY the safe
+# status subset — device names + up/down, no security warnings, no counts of exposures. Managing the token
+# is admin-only.
+
+def _require_admin(request: Request) -> None:
+    u = auth.current_user(request)
+    if not u or u.get("role") != "admin":
+        raise HTTPException(403, "Only an administrator can manage the display link.")
+
+
+@router.get("/kiosk")
+async def kiosk_config(request: Request):
+    _require_admin(request)
+    cfg = kiosk.config()
+    return {**cfg, "path": ("/k/%s" % cfg["token"]) if cfg["enabled"] else None}
+
+
+@router.post("/kiosk/rotate")
+async def kiosk_rotate(request: Request):
+    _require_admin(request)
+    tok = kiosk.rotate()
+    return {"enabled": True, "token": tok, "path": "/k/%s" % tok}
+
+
+@router.post("/kiosk/disable")
+async def kiosk_disable(request: Request):
+    _require_admin(request)
+    kiosk.disable()
+    return {"enabled": False, "token": None, "path": None}
+
+
+@router.get("/public/family/{token}")
+async def public_family(token: str):
+    """No login — guarded only by the token. Safe subset: what's online, never the security warnings."""
+    if not kiosk.valid(token):
+        raise HTTPException(404, "not found")
+    rows = _family_rows()
+    return {"ok": not any(r["status"] == "down" for r in rows),
+            "online": sum(1 for r in rows if r["status"] == "up"), "total": len(rows),
+            "devices": [{"name": r["name"], "role": r["role"], "status": r["status"], "icon": r["icon"]} for r in rows]}

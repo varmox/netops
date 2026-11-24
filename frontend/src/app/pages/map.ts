@@ -1,5 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ClarityModule } from '@clr/angular';
 import { firstValueFrom } from 'rxjs';
@@ -9,10 +10,10 @@ import { AgoPipe, BytesPipe } from '../ui';
 
 interface MapNode {
   id: string; name: string; category: string; ip?: string; mac?: string; vendor?: string;
-  type?: string; status?: string; port?: string | null; device_id?: string | null;
+  type?: string; status?: string; port?: string | null; port_manual?: boolean; device_id?: string | null;
 }
 interface Graph {
-  time: number | null; topology?: string;
+  time: number | null; topology?: string; iface_options?: string[];
   counts?: { devices: number; unknown: number; ports: number };
   nodes: MapNode[]; links: { source: string; target: string }[];
 }
@@ -24,10 +25,14 @@ const CATS = ['router', 'port', 'device', 'unknown', 'internet'];
 const STATUS_COLOR: Record<string, string> = { up: '#62a420', down: '#e12200', degraded: '#efc006', unknown: '#8c8c8c' };
 const CAT_COLOR: Record<string, string> = { router: '#0079ad', port: '#49afd9', internet: '#8939ad', unknown: '#8c8c8c' };
 const CAT_SIZE: Record<string, number> = { router: 46, internet: 34, port: 16, device: 28, unknown: 24 };
+const ICONS: Record<string, string> = {
+  mikrotik: 'router', zyxel: 'router', linux: 'host', tv: 'display', speaker: 'volume-up',
+  camera: 'video-camera', phone: 'mobile',
+};
 
 @Component({
   selector: 'app-map',
-  imports: [ClarityModule, Chart, AgoPipe, BytesPipe],
+  imports: [ClarityModule, FormsModule, Chart, AgoPipe, BytesPipe],
   template: `
     <div class="page-head">
       <h2>Network map</h2>
@@ -44,32 +49,80 @@ const CAT_SIZE: Record<string, number> = { router: 46, internet: 34, port: 16, d
     @if (graph(); as g) {
       @if (g.nodes.length > 1) {
         @if (layer() === 'physical') {
-          <p class="muted">{{ g.counts?.devices }} devices ({{ g.counts?.unknown }} unknown) on {{ g.counts?.ports }} ports ·
-            from {{ topologyLabel(g.topology) }} · built {{ g.time | ago }}. Drag nodes, scroll to zoom, click a known device.</p>
-          <div class="legend">
-            <span><i class="dot" style="background:#0079ad"></i> router</span><span><i class="dot" style="background:#49afd9"></i> port</span>
-            <span><i class="dot" style="background:#62a420"></i> up</span><span><i class="dot" style="background:#e12200"></i> down</span>
-            <span><i class="dot" style="background:#8c8c8c"></i> unknown</span>
-          </div>
+          <!-- ===== Static physical topology, grouped by interface ===== -->
+          <p class="muted">Which device hangs off which router interface · from {{ topologyLabel(g.topology) }} · built {{ g.time | ago }}.
+            @if (phys()?.unassignedCount) { <strong>{{ phys()!.unassignedCount }}</strong> device(s) have no detected interface — click the port tag to set it. }
+          </p>
+          @if (phys(); as p) {
+            <div class="card"><div class="card-block topo-wrap">
+              <div class="topo">
+                <div class="node net"><cds-icon shape="network-globe" size="20"></cds-icon> Internet</div>
+                <div class="drop"></div>
+                @if (p.router; as r) {
+                  <div class="node router" [class.clickable]="r.device_id" (click)="openNode(r)">
+                    <cds-icon shape="router" size="26"></cds-icon>
+                    <div class="meta"><div class="nm">{{ r.name }}</div><div class="sub mono">{{ r.ip }}</div></div>
+                    <span class="dot" [style.background]="statusColor(r.status)"></span>
+                  </div>
+                }
+                <div class="drop"></div>
+                <div class="ifaces">
+                  @for (grp of p.groups; track grp.name) {
+                    <div class="iface-col" [class.unassigned]="grp.unassigned">
+                      <div class="iface-name">{{ grp.name }}</div>
+                      <div class="devs">
+                        @for (d of grp.devices; track d.id) {
+                          <div class="dev s-{{ d.status }}">
+                            <cds-icon [shape]="icon(d)" size="18"></cds-icon>
+                            <div class="meta" [class.clickable]="d.device_id" (click)="openNode(d)">
+                              <div class="nm">{{ d.name }}</div>
+                              <div class="sub mono">{{ d.ip }}{{ d.vendor && !d.device_id ? ' · ' + d.vendor : '' }}</div>
+                            </div>
+                            @if (d.device_id) {
+                              @if (editing() === d.id) {
+                                <span class="iface-edit">
+                                  <input class="clr-input" list="iface-opts" [(ngModel)]="ifaceInput" placeholder="ether3" (keyup.enter)="saveIface(d)" (keyup.escape)="editing.set(null)" />
+                                  <button class="btn btn-sm btn-link in" (click)="saveIface(d)">Save</button>
+                                  <button class="btn btn-sm btn-link in" (click)="editing.set(null)">✕</button>
+                                </span>
+                              } @else {
+                                <button class="pill" [class.set]="d.port" (click)="editIface(d)"
+                                        [title]="d.port_manual ? 'Set manually — click to change' : 'Click to set the interface'">
+                                  {{ d.port || 'set port' }}@if (d.port_manual) { <span class="star">∗</span> }
+                                </button>
+                              }
+                            }
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div></div>
+            <datalist id="iface-opts">@for (o of g.iface_options || []; track o) { <option [value]="o"></option> }</datalist>
+            <p class="muted sm">Status colour on the left edge · <span class="star">∗</span> = interface set manually.
+              Click a known device to open it.</p>
+          }
         } @else {
-          <p class="muted">Who talks to whom, from the router's connection tracking. Arrows point from source to
-            destination; thicker = more bytes. External traffic collapses into the Internet node.
+          <!-- ===== Traffic (who talks to whom) ===== -->
+          <p class="muted">Who talks to whom, from the router's connection tracking. Arrows point source → destination;
+            thicker = more bytes. External traffic collapses into the Internet node.
             @if (traffic(); as t) { {{ t.counts?.internal }} internal · {{ t.counts?.external }} to internet · built {{ t.time | ago }}. }</p>
-        }
-        <div class="card"><div class="card-block">
-          <app-chart [options]="options()" height="620px" (itemClick)="open($event)" />
-        </div></div>
-
-        @if (layer() === 'traffic' && traffic()?.external?.length) {
-          <h3>Top talkers to the internet</h3>
-          <clr-datagrid>
-            <clr-dg-column>Device</clr-dg-column><clr-dg-column>Traffic</clr-dg-column><clr-dg-column>Connections</clr-dg-column><clr-dg-column>Top destinations</clr-dg-column>
-            @for (e of traffic()!.external; track e.device) {
-              <clr-dg-row><clr-dg-cell>{{ e.device_name }}</clr-dg-cell><clr-dg-cell>{{ e.bytes | bytes }}</clr-dg-cell>
-                <clr-dg-cell>{{ e.conns }}</clr-dg-cell>
-                <clr-dg-cell class="mono">@for (d of e.top; track d[0]) { <span class="dst">{{ d[0] }}</span> }</clr-dg-cell></clr-dg-row>
-            }
-          </clr-datagrid>
+          <div class="card"><div class="card-block">
+            <app-chart [options]="options()" height="620px" (itemClick)="open($event)" />
+          </div></div>
+          @if (traffic()?.external?.length) {
+            <h3>Top talkers to the internet</h3>
+            <clr-datagrid>
+              <clr-dg-column>Device</clr-dg-column><clr-dg-column>Traffic</clr-dg-column><clr-dg-column>Connections</clr-dg-column><clr-dg-column>Top destinations</clr-dg-column>
+              @for (e of traffic()!.external; track e.device) {
+                <clr-dg-row><clr-dg-cell>{{ e.device_name }}</clr-dg-cell><clr-dg-cell>{{ e.bytes | bytes }}</clr-dg-cell>
+                  <clr-dg-cell>{{ e.conns }}</clr-dg-cell>
+                  <clr-dg-cell class="mono">@for (d of e.top; track d[0]) { <span class="dst">{{ d[0] }}</span> }</clr-dg-cell></clr-dg-row>
+              }
+            </clr-datagrid>
+          }
         }
       } @else {
         <clr-alert clrAlertType="info" [clrAlertClosable]="false"><clr-alert-item>
@@ -82,6 +135,40 @@ const CAT_SIZE: Record<string, number> = { router: 46, internet: 34, port: 16, d
   styles: `
     .head-actions { display: flex; gap: 0.6rem; align-items: center; }
     .dst { margin-right: 0.6rem; }
+    .sm { font-size: 0.78rem; }
+    .star { color: #0079ad; font-weight: 700; }
+
+    .topo-wrap { overflow-x: auto; }
+    .topo { display: flex; flex-direction: column; align-items: center; min-width: min-content; padding: 0.5rem 0 1rem; }
+    .node { display: inline-flex; align-items: center; gap: 0.6rem; padding: 0.55rem 1rem; border-radius: 0.5rem;
+      border: 1px solid var(--clr-color-neutral-400, #cbd4d8); background: var(--clr-color-neutral-0, #fff); }
+    .node.net { background: rgba(137,57,173,0.08); border-color: rgba(137,57,173,0.3); font-weight: 600; }
+    .node.router { border-color: #0079ad; box-shadow: 0 1px 5px rgba(0,0,0,0.08); }
+    .node .meta .nm { font-weight: 600; } .node .sub { font-size: 0.72rem; opacity: 0.6; }
+    .node .dot { width: 0.6rem; height: 0.6rem; border-radius: 50%; }
+    .drop { width: 2px; height: 22px; background: var(--clr-color-neutral-400, #cbd4d8); }
+
+    .ifaces { display: flex; gap: 1.6rem; justify-content: center; align-items: flex-start; position: relative; padding-top: 22px; }
+    .ifaces::before { content: ''; position: absolute; top: 0; left: 8%; right: 8%; height: 2px; background: var(--clr-color-neutral-400, #cbd4d8); }
+    .iface-col { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; position: relative; min-width: 160px; max-width: 220px; }
+    .iface-col::before { content: ''; position: absolute; top: -22px; left: 50%; width: 2px; height: 22px; background: var(--clr-color-neutral-400, #cbd4d8); }
+    .iface-name { font-family: var(--clr-font-mono, monospace); font-size: 0.8rem; font-weight: 600; padding: 0.2rem 0.7rem;
+      border-radius: 1rem; background: rgba(0,121,173,0.1); color: #0079ad; white-space: nowrap; }
+    .iface-col.unassigned .iface-name { background: rgba(230,161,0,0.16); color: #946f00; }
+    .devs { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+    .dev { display: flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.6rem; border-radius: 0.4rem;
+      background: var(--clr-color-neutral-100, #f3f3f3); border-left: 3px solid #8c8c8c; }
+    .dev.s-up { border-left-color: #62a420; } .dev.s-down { border-left-color: #e12200; } .dev.s-degraded { border-left-color: #e6a100; }
+    .dev cds-icon { opacity: 0.8; flex: none; }
+    .dev .meta { flex: 1; min-width: 0; } .dev .nm { font-weight: 600; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dev .sub { font-size: 0.7rem; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clickable { cursor: pointer; } .clickable:hover .nm { text-decoration: underline; }
+    .pill { border: 1px dashed var(--clr-color-neutral-500, #9aa5ad); background: transparent; border-radius: 1rem;
+      font-size: 0.66rem; line-height: 1.3; padding: 0.05rem 0.5rem; cursor: pointer; color: var(--clr-color-neutral-600, #777); white-space: nowrap; }
+    .pill.set { border-style: solid; border-color: #0079ad; color: #0079ad; font-family: var(--clr-font-mono, monospace); }
+    .iface-edit { display: flex; align-items: center; gap: 0.1rem; }
+    .iface-edit .clr-input { width: 5.4rem; height: 1.5rem; font-size: 0.75rem; }
+    .btn-link.in { min-height: auto; margin: 0; padding: 0 0.25rem; }
   `,
 })
 export class MapPage implements OnInit {
@@ -92,8 +179,30 @@ export class MapPage implements OnInit {
   protected layer = signal<'physical' | 'traffic'>('physical');
   protected busy = signal(false);
   protected msg = signal<string | null>(null);
+  protected editing = signal<string | null>(null);
+  protected ifaceInput = '';
 
-  protected options = computed(() => (this.layer() === 'traffic' ? this.trafficOption() : this.physicalOption()));
+  /** Devices grouped by interface, named interfaces first, "Unassigned" last. */
+  protected phys = computed(() => {
+    const g = this.graph();
+    if (!g) return null;
+    const router = g.nodes.find((n) => n.category === 'router') ?? null;
+    const devices = g.nodes.filter((n) => n.category === 'device' || n.category === 'unknown');
+    const by = new Map<string, MapNode[]>();
+    for (const d of devices) {
+      const k = d.port || '';
+      if (!by.has(k)) by.set(k, []);
+      by.get(k)!.push(d);
+    }
+    const named = [...by.entries()].filter(([k]) => k)
+      .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }))
+      .map(([name, devs]) => ({ name, devices: devs, unassigned: false }));
+    const un = by.get('') ?? [];
+    const groups = un.length ? [...named, { name: 'Unassigned', devices: un, unassigned: true }] : named;
+    return { router, groups, unassignedCount: un.filter((d) => d.device_id).length };
+  });
+
+  protected options = computed(() => (this.layer() === 'traffic' ? this.trafficOption() : {}));
 
   ngOnInit(): void {
     this.load();
@@ -105,7 +214,31 @@ export class MapPage implements OnInit {
   }
 
   protected topologyLabel(t?: string): string {
-    return { router: 'the router (ports)', leases: 'DHCP leases', inventory: 'the inventory' }[t ?? ''] ?? t ?? '—';
+    return { router: 'the router (bridge/ARP)', leases: 'DHCP leases', inventory: 'the inventory' }[t ?? ''] ?? t ?? '—';
+  }
+
+  protected icon(n: MapNode): string {
+    return ICONS[n.type ?? ''] ?? (n.category === 'unknown' ? 'unknown-status' : 'devices');
+  }
+
+  protected statusColor(s?: string): string {
+    return STATUS_COLOR[s ?? 'unknown'];
+  }
+
+  protected openNode(n: MapNode | null): void {
+    if (n?.device_id) this.router.navigate(['/devices', n.device_id]);
+  }
+
+  protected editIface(d: MapNode): void {
+    this.ifaceInput = d.port || '';
+    this.editing.set(d.id);
+  }
+
+  protected saveIface(d: MapNode): void {
+    this.http.post('/api/netmap/interface', { device_id: d.device_id, interface: this.ifaceInput.trim() || null }).subscribe({
+      next: () => { this.editing.set(null); this.load(); },
+      error: (e) => { this.editing.set(null); this.msg.set(errorText(e)); },
+    });
   }
 
   protected async rescan(): Promise<void> {
@@ -124,30 +257,10 @@ export class MapPage implements OnInit {
     if (n?.device_id) this.router.navigate(['/devices', n.device_id]);
   }
 
-  private physicalOption() {
-    const g = this.graph();
-    if (!g) return {};
-    const color = (n: MapNode) =>
-      n.category === 'device' || n.category === 'unknown' ? STATUS_COLOR[n.status ?? 'unknown'] : CAT_COLOR[n.category];
-    return {
-      tooltip: { formatter: (p: { dataType: string; data: MapNode }) => this.nodeTip(p) },
-      series: [{
-        type: 'graph', layout: 'force', roam: true, draggable: true, zoom: 1.1,
-        force: { repulsion: 190, edgeLength: [40, 130], gravity: 0.08 },
-        label: { show: true, position: 'right', fontSize: 11 }, emphasis: { focus: 'adjacency' },
-        categories: CATS.map((name) => ({ name })),
-        lineStyle: { color: 'source', opacity: 0.5, width: 1.3 },
-        data: g.nodes.map((n) => ({ ...n, category: CATS.indexOf(n.category), symbolSize: CAT_SIZE[n.category] ?? 22, itemStyle: { color: color(n) } })),
-        links: g.links.map((l) => ({ source: l.source, target: l.target })),
-      }],
-    };
-  }
-
   private trafficOption() {
     const g = this.graph();
     const t = this.traffic();
     if (!g || !t) return {};
-    // Traffic view uses the device/router/internet nodes (ports aren't traffic endpoints).
     const nodes = g.nodes.filter((n) => n.category !== 'port');
     const used = new Set<string>();
     t.flows.forEach((f) => { used.add(f.source); used.add(f.target); });

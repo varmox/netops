@@ -40,6 +40,8 @@ export class App {
   protected prefs = inject(Prefs);
   protected vault = inject(VaultService);
   protected navCollapsed = signal(false);
+  // Expanded/collapsed state per nav group (all open by default; Clarity two-way binds these).
+  protected navGroups = { infra: true, monitoring: true, security: true, settings: true };
   protected devices = signal<Device[]>([]);
   protected bannerClosed = signal(false);
   protected down = computed(() => this.devices().filter((d) => d.state.status === 'down'));

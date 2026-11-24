@@ -67,12 +67,22 @@ def _parse_cert(der: bytes) -> dict:
         attrs = name.get_attributes_for_oid(NameOID.COMMON_NAME)
         return attrs[0].value if attrs else None
 
+    try:
+        sans = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName).value.get_values_for_type(x509.DNSName)
+    except x509.ExtensionNotFound:
+        sans = []
+    sig = cert.signature_hash_algorithm.name if cert.signature_hash_algorithm else None
+
     return {
         "subject_cn": cn(cert.subject),
         "issuer_cn": cn(cert.issuer),
         "self_signed": cert.subject == cert.issuer,
         "expires": cert.not_valid_after_utc.timestamp(),
+        "not_before": cert.not_valid_before_utc.timestamp(),
         "fingerprint": cert.fingerprint(hashes.SHA256()).hex()[:32],
+        "sans": sans[:16],
+        "key_bits": getattr(cert.public_key(), "key_size", None),
+        "sig_algo": sig,
     }
 
 

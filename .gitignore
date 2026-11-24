@@ -21,3 +21,6 @@ frontend/node_modules/
 frontend/dist/
 frontend/.angular/
 __pycache__/
+
+# Local inventory (copy of config/devices.example.yml)
+config/devices.yml

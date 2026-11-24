@@ -3,7 +3,7 @@
 devices.yml:
   - id: server1
     type: linux
-    host: 192.168.8.20
+    host: 192.168.1.20
     ssh: { user: netops, key: /secrets/linux_id_ed25519, port: 22 }
     docker: true          # also scan running container images with Trivy
 

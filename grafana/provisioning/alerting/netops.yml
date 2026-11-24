@@ -30,7 +30,7 @@ groups:
         condition: C
         for: 2m
         labels: { severity: critical }
-        annotations: { summary: "None of 1.1.1.1, 9.9.9.9 and init7.net answer pings from the LAN." }
+        annotations: { summary: "None of 1.1.1.1 and 9.9.9.9 answer pings from the LAN." }
         noDataState: OK
         execErrState: Error
         data:

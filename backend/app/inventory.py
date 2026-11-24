@@ -74,8 +74,13 @@ _cache: tuple[tuple, list[Device]] | None = None
 
 def _files() -> list:
     """devices.yml plus any config/devices.d/*.yml (e.g. a lab host you can delete without touching the main file)."""
+    main = settings.DEVICES_FILE
+    if not main.is_file():                         # fresh clone: fall back to the shipped example
+        example = main.with_name("devices.example.yml")
+        if example.is_file():
+            main = example
     extra = settings.DEVICES_FILE.parent / "devices.d"
-    return [settings.DEVICES_FILE] + (sorted(extra.glob("*.yml")) if extra.is_dir() else [])
+    return [main] + (sorted(extra.glob("*.yml")) if extra.is_dir() else [])
 
 
 def load() -> list[Device]:

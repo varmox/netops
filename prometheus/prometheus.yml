@@ -24,9 +24,9 @@ scrape_configs:
     metrics_path: /probe
     params: { module: [icmp] }
     static_configs:
-      - targets: ["1.1.1.1", "9.9.9.9", "init7.net"]
+      - targets: ["1.1.1.1", "9.9.9.9"]
         labels: { probe: internet }
-      - targets: ["192.168.8.1", "172.16.1.1"]
+      - targets: ["192.168.1.1"]
         labels: { probe: gateway }
     relabel_configs: &blackbox
       - source_labels: [__address__]
@@ -40,5 +40,5 @@ scrape_configs:
     metrics_path: /probe
     params: { module: [http_2xx] }
     static_configs:
-      - targets: ["https://www.init7.net", "https://www.google.com"]
+      - targets: ["https://www.google.com"]
     relabel_configs: *blackbox

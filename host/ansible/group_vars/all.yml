@@ -1,7 +1,7 @@
 ---
 # --- Network ---------------------------------------------------------------------------------------
 # Who may reach the box. Everything else is dropped.
-lan_cidrs_v4: ["192.168.8.0/24"]
+lan_cidrs_v4: ["192.168.1.0/24"]
 lan_cidrs_v6: []                         # e.g. your LAN's /64 once IPv6 is routed
 admin_user: "{{ ansible_user }}"         # SSH key login, sudo with password
 
@@ -9,7 +9,7 @@ admin_user: "{{ ansible_user }}"         # SSH key login, sudo with password
 netops_published_ports: [80, 443, 8090, 2222]
 
 # --- Time ------------------------------------------------------------------------------------------
-timezone: Europe/Zurich
+timezone: UTC
 chrony_servers:                          # NTS-authenticated first, then the public pool
   - "time.cloudflare.com iburst nts"
   - "ptbtime1.ptb.de iburst nts"

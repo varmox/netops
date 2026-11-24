@@ -37,7 +37,7 @@ services:
     mem_limit: 768m
     build: ./backend
     environment:
-      TZ: ${TZ:-Europe/Zurich}
+      TZ: ${TZ:-UTC}
       NETOPS_HOSTNAME: ${NETOPS_HOSTNAME:-netops.lan}     # passkeys work only on this host name (or localhost)
       SESSION_HOURS: ${SESSION_HOURS:-12}
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
@@ -74,7 +74,7 @@ services:
     image: binwiederhier/ntfy:v2.38.1
     command: serve
     environment:
-      TZ: ${TZ:-Europe/Zurich}
+      TZ: ${TZ:-UTC}
     ports: ["8090:80"]
     volumes:
       - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
@@ -95,7 +95,7 @@ services:
     <<: *restart
     image: grafana/grafana:13.3.1
     environment:
-      TZ: ${TZ:-Europe/Zurich}
+      TZ: ${TZ:-UTC}
       GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}

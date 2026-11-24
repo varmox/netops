@@ -2,5 +2,5 @@
 all:
   hosts:
     netops:
-      ansible_host: 192.168.8.10
-      ansible_user: yannick
+      ansible_host: 192.168.1.10
+      ansible_user: pi

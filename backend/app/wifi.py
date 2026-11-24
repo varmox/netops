@@ -271,7 +271,7 @@ def _parse_scan(text: str) -> list[dict]:
             "bssid": bssid.upper(), "ssid": name, "frequency": ch["frequency"], "channel": ch["channel"],
             "band": ch["band"], "width_mhz": ch["width_mhz"], "signal": signal,
             "security": sec or "open", "stations": int(sta) if sta else None,
-            "note": "your work SD-WAN" if ("velocloud" in low or low == "vc-wifi") else "",
+            "note": "a corporate SD-WAN" if ("velocloud" in low or low == "vc-wifi") else "",
         }
     return sorted(best.values(), key=lambda n: (n["band"], -n["signal"]))
 

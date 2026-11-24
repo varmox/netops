@@ -73,7 +73,7 @@ function one(r: MetricResult | undefined): number | null {
             {{ online() ? 'Online' : online() === false ? 'Offline' : '–' }}
             <small>{{ fmt(inetLatency(), 'ms') }}</small>
           </div>
-          <div class="sub">Average latency to 1.1.1.1, 9.9.9.9, init7.net</div>
+          <div class="sub">Average latency to 1.1.1.1 and 9.9.9.9</div>
           <app-spark [values]="sparks().internet" [color]="palette[1]" />
         </div></div>
       </div>

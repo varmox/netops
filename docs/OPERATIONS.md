@@ -42,7 +42,7 @@ sftp    ──► :2222 backups (read-only) + inbox
    ```
 2. On the MikroTik, give the mini PC a fixed address, for example `.10`:
    ```
-   /ip dhcp-server lease add address=192.168.8.10 mac-address=<mini PC MAC> comment="netops mini PC"
+   /ip dhcp-server lease add address=192.168.1.10 mac-address=<mini PC MAC> comment="netops mini PC"
    ```
 3. Copy this folder to the mini PC (`git clone` or `rsync`). Then:
    ```bash
@@ -52,7 +52,7 @@ sftp    ──► :2222 backups (read-only) + inbox
    cp ~/.ssh/id_ed25519.pub sftp/keys/me.pub  # who may log in to SFTP
    docker compose up -d --build
    ```
-4. Open `https://192.168.8.10/` and log in with `WEBUI_USER` / `WEBUI_PASSWORD`. The first start creates a
+4. Open `https://192.168.1.10/` and log in with `WEBUI_USER` / `WEBUI_PASSWORD`. The first start creates a
    self-signed certificate in `certs/`; put your own `netops.crt` + `netops.key` there to replace it.
 
 ## Router preparation (recommended)
@@ -60,7 +60,7 @@ sftp    ──► :2222 backups (read-only) + inbox
 **A dedicated backup user** instead of `claude`: read-only, key login.
 ```
 /user group add name=netops-backup policy=ssh,read,test,sensitive,ftp comment="NetOps config backups"
-/user add name=netops group=netops-backup password=[:rndstr length=32] address=192.168.8.10/32
+/user add name=netops group=netops-backup password=[:rndstr length=32] address=192.168.1.10/32
 /user ssh-keys import public-key-file=netops.pub user=netops    # upload netops.pub first (RSA key)
 ```
 Then set `user: netops` for the MikroTik in `config/devices.yml`.
@@ -69,8 +69,8 @@ Then set `user: netops` for the MikroTik in `config/devices.yml`.
 **mktxp metrics** (the "MikroTik (mktxp)" dashboard) need the RouterOS API, but only from the mini PC:
 ```
 /user group add name=mktxp policy=api,read
-/user add name=mktxp group=mktxp password=<strong password> address=192.168.8.10/32
-/ip service set [find name=api and !dynamic] disabled=no address=192.168.8.10/32
+/user add name=mktxp group=mktxp password=<strong password> address=192.168.1.10/32
+/ip service set [find name=api and !dynamic] disabled=no address=192.168.1.10/32
 ```
 Then `cp mktxp/mktxp.conf.example mktxp/mktxp.conf`, set the password, and run
 `docker compose --profile mktxp up -d`.
@@ -79,8 +79,8 @@ Then `cp mktxp/mktxp.conf.example mktxp/mktxp.conf`, set the password, and run
 
 - **Add a device:** add it to `config/devices.yml`. The backend picks up the change at the next check round.
 - **Back up now:** in the UI (device page, the Devices action bar, or Backups → "Back up now…").
-- **Alerts on your phone:** install the ntfy app → add server `http://192.168.8.10:8090` → subscribe to the topic from `.env`.
-- **SFTP:** `sftp -P 2222 backup@192.168.8.10`. `backups/` is read-only; uploads go into `inbox/`.
+- **Alerts on your phone:** install the ntfy app → add server `http://192.168.1.10:8090` → subscribe to the topic from `.env`.
+- **SFTP:** `sftp -P 2222 backup@192.168.1.10`. `backups/` is read-only; uploads go into `inbox/`.
   After adding or removing a key in `sftp/keys/`, run `docker compose up -d --force-recreate sftp`: the image only
   reads keys when the container is created, not on a restart.
 - **API docs:** `https://<host>/api/docs` (after logging in).

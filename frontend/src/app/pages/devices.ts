@@ -229,7 +229,7 @@ export class StatusFilter implements ClrDatagridFilterInterface<Device> {
           </clr-select-container>
           <clr-input-container>
             <label>Address</label>
-            <input clrInput name="host" [(ngModel)]="form.host" placeholder="192.168.8.50 or a hostname" required />
+            <input clrInput name="host" [(ngModel)]="form.host" placeholder="192.168.1.50 or a hostname" required />
           </clr-input-container>
           <clr-input-container>
             <label>Role</label>

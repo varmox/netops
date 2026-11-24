@@ -68,7 +68,7 @@ check("eol ok far", lifecycle._assess(far)[0] == "ok")
 check("eol cycle match", lifecycle._eol_for([{"cycle": "24.04", "eol": "2029-05-31", "latest": "24.04.1"}], "24.04")[0] == "2029-05-31")
 
 # ---- credcheck: LAN guard
-check("lan 192.168", credcheck._is_lan("192.168.8.5"))
+check("lan 192.168", credcheck._is_lan("192.168.1.5"))
 check("lan 10", credcheck._is_lan("10.1.2.3"))
 check("lan 172.16", credcheck._is_lan("172.16.0.9"))
 check("not lan public", not credcheck._is_lan("8.8.8.8"))
@@ -78,10 +78,10 @@ check("not lan garbage", not credcheck._is_lan("example.com"))
 sample = """=== upnp ===
 true
 === upnp-active ===
-8080|192.168.8.50|tcp|upnp 192.168.8.50: 8080
+8080|192.168.1.50|tcp|upnp 192.168.1.50: 8080
 === portforward ===
-443|192.168.8.10|tcp|web
-8080|192.168.8.50|tcp|upnp 192.168.8.50: 8080
+443|192.168.1.10|tcp|web
+8080|192.168.1.50|tcp|upnp 192.168.1.50: 8080
 === input ===
 22|tcp|WAN|ssh from wan
 53|udp|LAN|dns

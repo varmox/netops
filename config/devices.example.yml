@@ -1,0 +1,77 @@
+# Example inventory. Copy to config/devices.yml and edit for your network.
+# (devices.yml is git-ignored; NetOps falls back to this example if it is missing.)
+#
+# Every device NetOps watches, and how to back up its config.
+# Checks: ping | {tcp: <port>} | {http: <url>}. A device is "down" after FAILS_BEFORE_DOWN rounds with every
+# check failing, and "degraded" when only some fail. Secrets never go here: backup credentials come from
+# files in /secrets or environment variables from .env.
+# software: products checked against CISA KEV and NVD (CPE vendor:product; version fixed, or read from the
+# latest backup with version_from). protected: true = never quarantined by the security remediation.
+# alert: whether a down/degraded device pushes a notification. Omit it and only infrastructure (protected:
+# true) pages you — a TV or phone dropping off is normal and stays silent, still tracked for uptime. Set
+# `alert: true` to force paging on any device, or `alert: false` to mute an infrastructure device.
+
+devices:
+  - id: router
+    name: Main router
+    type: mikrotik                     # driver: mikrotik | zyxel | linux | generic
+    role: Router · Wi-Fi · firewall
+    host: 192.168.1.1
+    checks: [ping, {tcp: 22}, {http: "http://192.168.1.1/"}]
+    backup:
+      method: mikrotik-ssh
+      user: netops                     # a dedicated read-only backup user (see README)
+      key: /secrets/mikrotik_id_rsa
+      binary: false                    # true: also save and download a binary /system backup
+    links:
+      WebFig: http://192.168.1.1/
+    facts:
+      LAN: 192.168.1.0/24
+    protected: true                    # never quarantined
+    software:
+      - { name: RouterOS, cpe: "cpe:2.3:o:mikrotik:routeros", version_from: mikrotik }
+
+  - id: modem
+    name: VDSL/cable modem
+    type: zyxel
+    role: Modem-router
+    host: 192.168.100.1
+    checks: [ping, {http: "https://192.168.100.1/"}, {tcp: 22}]   # SSH + HTTPS only
+    backup:
+      method: zyxel-zcfg
+      user_env: ZYXEL_USER
+      password_env: ZYXEL_PASSWORD
+      redact: true                     # passwords and keys in the snapshot become <redacted>
+      scheme: https                    # the web GUI is HTTPS-only (self-signed)
+    links:
+      Web GUI: https://192.168.100.1/
+    protected: true
+
+  - id: nas
+    name: Home server / NAS
+    type: linux
+    role: File server · Docker host
+    host: 192.168.1.20
+    checks: [ping, {tcp: 22}]
+    backup:
+      method: null                     # Linux hosts are monitored, not config-backed-up here
+    ssh: { user: netops, key: /secrets/linux_id_ed25519, port: 22 }
+    docker: true                       # also scan running container images with Trivy
+
+  - id: tv
+    name: Smart TV
+    type: generic
+    role: Media device
+    host: 192.168.1.50
+    checks: [ping]
+    # version unknown: only actively exploited CVEs are reported
+    software:
+      - { name: webOS, cpe: "cpe:2.3:o:lg:webos" }
+
+  - id: netops-host
+    name: NetOps host
+    type: generic
+    role: Docker host running this stack
+    host: 192.168.1.10
+    checks: [ping]
+    protected: true

@@ -1,0 +1,6 @@
+# Copy to inventory.yml. The admin user is the one created with Raspberry Pi Imager (SSH key login).
+all:
+  hosts:
+    netops:
+      ansible_host: 192.168.8.10
+      ansible_user: yannick

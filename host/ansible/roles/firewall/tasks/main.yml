@@ -1,0 +1,59 @@
+---
+# nftables: default-deny inbound, admin access from the LAN only.
+# Docker keeps its own tables (iptables-nft). This role owns only "table inet netops" and never flushes the
+# whole ruleset — Ubuntu's stock /etc/nftables.conf does ("flush ruleset"), which would wipe Docker's rules,
+# so that service is disabled and netops-firewall.service loads our table instead.
+
+- name: Nftables installed
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Firewall rules
+  ansible.builtin.template:
+    src: netops.nft.j2
+    dest: /etc/netops/firewall.nft
+    mode: "0600"
+  notify: Reload firewall
+
+- name: Service that loads (only) the netops table
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/netops-firewall.service
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=NetOps host firewall (nftables table inet netops)
+      Wants=network-pre.target
+      Before=network-pre.target docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/nft -f /etc/netops/firewall.nft
+      ExecReload=/usr/sbin/nft -f /etc/netops/firewall.nft
+      ExecStop=/usr/sbin/nft delete table inet netops
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: Reload firewall
+
+- name: Ubuntu's nftables.service would flush Docker's rules — keep it off
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: false
+    state: stopped
+  failed_when: false
+  tags: [services]
+
+- name: Check the rules before loading them
+  ansible.builtin.command: nft -c -f /etc/netops/firewall.nft
+  changed_when: false
+  tags: [services]
+
+- name: Firewall active at boot
+  ansible.builtin.systemd_service:
+    name: netops-firewall
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [services]

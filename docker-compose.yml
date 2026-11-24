@@ -1,0 +1,189 @@
+name: netops
+
+# Irrenhaus NetOps: web UI + API, metrics, alerts and config backups for the home network.
+# Ports on the Docker host: 443 web UI with login (80 redirects; Grafana under /grafana), 8090 ntfy (phones), 2222 SFTP.
+
+x-restart: &restart
+  restart: unless-stopped
+
+# Container baseline (NIST SP 800-190 / CIS Docker Benchmark): no privilege escalation, no capabilities
+# unless a service needs one, read-only root filesystem, memory and PID limits sized for a Raspberry Pi.
+x-hardened: &hardened
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  read_only: true
+  tmpfs: ["/tmp:size=64m,mode=1777"]
+  pids_limit: 256
+
+services:
+  web:
+    <<: [*restart, *hardened]
+    mem_limit: 96m
+    cap_add: [NET_BIND_SERVICE, CHOWN, SETUID, SETGID]   # nginx master binds 80/443 then drops to the nginx user
+    tmpfs: ["/tmp:size=16m", "/var/cache/nginx:size=32m", "/var/run:size=1m"]
+    build: ./frontend
+    ports: ["80:80", "443:443"]
+    environment:
+      # Names for the self-signed certificate (created on first start when ./certs is empty)
+      NETOPS_HOSTNAME: ${NETOPS_HOSTNAME:-netops.lan}
+      NETOPS_IP: ${NETOPS_IP:-}
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs
+    depends_on: [backend, grafana, ntfy]
+
+  backend:
+    <<: [*restart, *hardened]
+    mem_limit: 768m
+    build: ./backend
+    environment:
+      TZ: ${TZ:-Europe/Zurich}
+      NETOPS_HOSTNAME: ${NETOPS_HOSTNAME:-netops.lan}     # passkeys work only on this host name (or localhost)
+      SESSION_HOURS: ${SESSION_HOURS:-12}
+      SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-30}
+      NTFY_URL: http://ntfy
+      PROMETHEUS_URL: http://prometheus:9090
+      NETOPS_PUBLIC_URL: ${NETOPS_PUBLIC_URL:-https://netops.lan}
+      SECURITY_DRY_RUN: ${SECURITY_DRY_RUN:-false}
+      SECURITY_SCAN_TIME: ${SECURITY_SCAN_TIME:-02:30}
+      NVD_API_KEY: ${NVD_API_KEY:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-netops}
+      ZYXEL_USER: ${ZYXEL_USER:-}
+      ZYXEL_PASSWORD: ${ZYXEL_PASSWORD:-}
+      BACKUP_TIME: ${BACKUP_TIME:-03:15}
+      BACKUP_KEEP: ${BACKUP_KEEP:-60}
+      CHECK_INTERVAL: ${CHECK_INTERVAL:-60}
+      FAILS_BEFORE_DOWN: ${FAILS_BEFORE_DOWN:-2}
+      # Added features
+      HONEYPOT_ENABLED: ${HONEYPOT_ENABLED:-true}
+      CREDCHECK_ENABLED: ${CREDCHECK_ENABLED:-false}      # default-password audit: opt-in
+      ADGUARD_URL: ${ADGUARD_URL:-http://adguard:3000}
+      ADGUARD_USER: ${ADGUARD_USER:-}
+      ADGUARD_PASSWORD: ${ADGUARD_PASSWORD:-}
+      REPORT_DAY: ${REPORT_DAY:-0}
+      REPORT_TIME: ${REPORT_TIME:-08:00}
+      COMPLIANCE_DIR: /data/compliance
+    volumes:
+      - ./config:/config:ro
+      - ./secrets:/secrets:ro
+      - ./data:/data
+
+  ntfy:
+    <<: [*restart, *hardened]
+    mem_limit: 96m
+    image: binwiederhier/ntfy:v2.38.1
+    command: serve
+    environment:
+      TZ: ${TZ:-Europe/Zurich}
+    ports: ["8090:80"]
+    volumes:
+      - ./ntfy/server.yml:/etc/ntfy/server.yml:ro
+      - ntfy-cache:/var/cache/ntfy
+
+  prometheus:
+    <<: [*restart, *hardened]
+    mem_limit: 512m
+    image: prom/prometheus:v3.16.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=180d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    <<: *restart
+    image: grafana/grafana:13.3.1
+    environment:
+      TZ: ${TZ:-Europe/Zurich}
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/grafana/"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      # Everyone who got past the web UI login may look at dashboards; changes need the Grafana admin.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_DEFAULT_THEME: system
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+  blackbox:
+    <<: [*restart, *hardened]
+    mem_limit: 64m
+    cap_add: [NET_RAW]   # ICMP probes
+    image: prom/blackbox-exporter:v0.29.1
+    command: --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+  node-exporter:
+    <<: [*restart, *hardened]
+    mem_limit: 64m
+    image: prom/node-exporter:v1.13.1
+    command: --path.rootfs=/host
+    pid: host
+    volumes:
+      - /:/host:ro
+
+  # Detailed MikroTik metrics through the RouterOS API. Needs the read-only "mktxp" router user and
+  # mktxp/mktxp.conf (see README), so it only starts with: docker compose --profile mktxp up -d
+  # Our own build (images/mktxp, pushed to the internal Harbor by images/build.sh mktxp).
+  mktxp:
+    <<: [*restart, *hardened]
+    mem_limit: 128m
+    image: ${REGISTRY:-localhost:8880}/netops/mktxp:2.1.0
+    profiles: [mktxp]
+    volumes:
+      - ./mktxp:/etc/mktxp
+
+  sftp:
+    <<: *restart
+    image: atmoz/sftp:alpine
+    # User "backup", key login only (keys in sftp/keys/*.pub). Sees all backups read-only and an inbox to upload into.
+    command: backup::1001:1001
+    ports: ["2222:22"]
+    volumes:
+      - ./sftp/keys:/home/backup/.ssh/keys:ro
+      - ./data/backups:/home/backup/backups:ro
+      - ./data/inbox:/home/backup/inbox
+
+  # Lab Linux host to try the SSH-update and Trivy providers (docker compose --profile lab up -d).
+  # It talks to this machine's Docker through the socket, so Trivy scans the images running here.
+  lab-linux:
+    build: ./lab/linux
+    profiles: [lab]
+    volumes:
+      - ./secrets/linux_id_ed25519.pub:/lab-key.pub:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # Optional DNS filtering + per-device query log (feature 1): docker compose --profile dns up -d
+  # First run: open http://<host>:3000 to set the admin user/password, then put them in .env
+  # (ADGUARD_USER / ADGUARD_PASSWORD) so NetOps can read the stats. Point your LAN's DHCP DNS at this host.
+  adguard:
+    <<: *restart
+    image: adguard/adguardhome:v0.107.65
+    profiles: [dns]
+    # AdGuard insists on root for first launch; it owns its volumes (chowned to root once), so cap_drop ALL
+    # is fine — the only capability it needs is binding :53.
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "3000:3000"      # initial setup UI; NetOps reads the API on this port
+    volumes:
+      - adguard-work:/opt/adguardhome/work
+      - adguard-conf:/opt/adguardhome/conf
+
+volumes:
+  ntfy-cache:
+  prometheus-data:
+  grafana-data:
+  adguard-work:
+  adguard-conf:

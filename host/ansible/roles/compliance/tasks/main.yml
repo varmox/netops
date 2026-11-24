@@ -1,0 +1,80 @@
+---
+# DISA STIG applied with SSG's own remediation (tailored), then a monthly OpenSCAP report: tailored STIG
+# and CIS Level 1 Server (report only — its firewall rules would conflict with Docker).
+
+- name: STIG tailoring (deviations from DEVIATIONS.md)
+  ansible.builtin.template:
+    src: tailoring.xml.j2
+    dest: /etc/netops/stig-tailoring.xml
+    mode: "0640"
+
+- name: Apply the STIG (SSG remediation; only failing rules are changed)
+  ansible.builtin.command:
+    cmd: >
+      oscap xccdf eval --remediate --progress
+      --tailoring-file /etc/netops/stig-tailoring.xml --profile {{ stig_profile }}
+      --results /var/lib/netops-stig-remediation.xml {{ ssg_datastream }}
+  register: compliance_remediation
+  when: stig_remediate
+  changed_when: "':fixed' in compliance_remediation.stdout"
+  failed_when: compliance_remediation.rc not in [0, 2]
+  async: 7200
+  poll: 30
+  notify:
+    - Validate and restart ssh
+    - Reload audit rules
+    - Reload sysctl
+  tags: [stig]
+
+- name: Rules the remediation could not fix
+  ansible.builtin.debug:
+    msg: "{{ compliance_remediation.stdout_lines | select('search', ':(fail|error)$') | list }}"
+  when: stig_remediate and compliance_remediation.stdout is defined
+  tags: [stig]
+
+- name: Compliance scan script
+  ansible.builtin.template:
+    src: netops-compliance-scan.j2
+    dest: /usr/local/sbin/netops-compliance-scan
+    mode: "0750"
+
+- name: Monthly scan (service + timer)
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: netops-compliance.service
+      content: |
+        [Unit]
+        Description=NetOps OpenSCAP compliance scan
+        [Service]
+        Type=oneshot
+        Nice=10
+        IOSchedulingClass=idle
+        ExecStart=/usr/local/sbin/netops-compliance-scan
+    - name: netops-compliance.timer
+      content: |
+        [Unit]
+        Description=Monthly NetOps compliance scan
+        [Timer]
+        OnCalendar=monthly
+        RandomizedDelaySec=6h
+        Persistent=true
+        [Install]
+        WantedBy=timers.target
+
+- name: Timer enabled
+  ansible.builtin.systemd_service:
+    name: netops-compliance.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [services]
+
+- name: Run a scan now (the first report)
+  ansible.builtin.command: /usr/local/sbin/netops-compliance-scan
+  async: 3600
+  poll: 30
+  changed_when: false
+  tags: [services, compliance-now]

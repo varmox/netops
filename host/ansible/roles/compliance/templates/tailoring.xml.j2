@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Managed by the NetOps host playbook. The DISA STIG for Ubuntu 24.04 as applied to the NetOps appliance:
+     every deselected rule and changed value is explained in host/ansible/DEVIATIONS.md. -->
+<xccdf-1.2:Tailoring xmlns:xccdf-1.2="http://checklists.nist.gov/xccdf/1.2" id="xccdf_netops_tailoring_stig">
+  <xccdf-1.2:benchmark href="/usr/share/netops/ssg/ssg-ubuntu2404-ds.xml"/>
+  <xccdf-1.2:version time="2026-11-24T00:00:00">{{ ssg_version }}-netops1</xccdf-1.2:version>
+  <xccdf-1.2:Profile id="xccdf_netops_profile_stig_appliance" extends="xccdf_org.ssgproject.content_profile_stig">
+    <xccdf-1.2:title>DISA STIG (Ubuntu 24.04) for the NetOps appliance</xccdf-1.2:title>
+{% for rule in stig_deselect + stig_extra_deselect %}
+    <xccdf-1.2:select idref="xccdf_org.ssgproject.content_rule_{{ rule }}" selected="false"/>
+{% endfor %}
+    <xccdf-1.2:set-value idref="xccdf_org.ssgproject.content_value_var_accounts_passwords_pam_faillock_unlock_time">{{ stig_faillock_unlock_time }}</xccdf-1.2:set-value>
+    <xccdf-1.2:set-value idref="xccdf_org.ssgproject.content_value_var_auditd_space_left_action">syslog</xccdf-1.2:set-value>
+  </xccdf-1.2:Profile>
+</xccdf-1.2:Tailoring>

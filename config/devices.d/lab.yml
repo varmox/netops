@@ -1,0 +1,10 @@
+# Lab host for the Linux providers (docker compose --profile lab). Delete this file on the real server.
+devices:
+  - id: lab-linux
+    name: Lab Linux host
+    type: linux
+    role: Debian 12 lab target (SSH updates + Trivy)
+    host: lab-linux
+    checks: [{tcp: 22}]
+    ssh: { user: netops, key: /secrets/linux_id_ed25519, port: 22 }
+    docker: true

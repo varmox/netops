@@ -1,0 +1,132 @@
+@if (auth.user()) {
+  <div class="main-container">
+    @if (auth.isAdmin() && vault.status()?.initialized && !vault.status()?.unlocked) {
+      <clr-alert [clrAlertAppLevel]="true" clrAlertType="warning" [clrAlertClosable]="false">
+        <clr-alert-item>
+          <span class="alert-text">The vault is locked: scans and backups that need device credentials are waiting.</span>
+          <div class="alert-actions"><a class="btn alert-action" routerLink="/vault">Unlock</a></div>
+        </clr-alert-item>
+      </clr-alert>
+    }
+    @if (prefs.downBanner() && down().length && !bannerClosed()) {
+      <clr-alert [clrAlertAppLevel]="true" clrAlertType="danger" [clrAlertClosable]="true"
+                 (clrAlertClosedChange)="bannerClosed.set(true)">
+        <clr-alert-item>
+          <span class="alert-text">{{ down().length }} device{{ down().length > 1 ? 's are' : ' is' }} down: {{ downNames() }}</span>
+          <div class="alert-actions">
+            <a class="btn alert-action" routerLink="/devices">View devices</a>
+          </div>
+        </clr-alert-item>
+      </clr-alert>
+    }
+
+    <header class="header header-6">
+      <div class="branding">
+        <a routerLink="/dashboard" class="nav-link">
+          <cds-icon shape="network-globe" size="lg"></cds-icon>
+          <span class="title">Irrenhaus NetOps</span>
+        </a>
+      </div>
+      <div class="header-actions">
+        <span class="live" [class.on]="alerts.connected()"
+              [title]="alerts.connected() ? 'Live alerts connected' : 'Live alerts reconnecting'">
+          {{ alerts.connected() ? 'live' : 'offline' }}
+        </span>
+        <a routerLink="/alerts" class="nav-link nav-icon" aria-label="Alerts" (click)="alerts.markSeen()">
+          <cds-icon shape="bell" [badge]="alerts.unseen() ? 'danger' : ''"></cds-icon>
+        </a>
+        <clr-dropdown>
+          <button class="nav-text user-btn" clrDropdownTrigger aria-label="User menu">
+            <cds-icon shape="user"></cds-icon> {{ auth.user()?.name }}
+            <cds-icon shape="angle" direction="down"></cds-icon>
+          </button>
+          <clr-dropdown-menu *clrIfOpen clrPosition="bottom-right">
+            <h4 class="dropdown-header">Signed in as {{ auth.user()?.name }} ({{ auth.user()?.role }})</h4>
+            <a clrDropdownItem routerLink="/account"><cds-icon shape="user"></cds-icon> Account &amp; sign-in</a>
+            @if (auth.isAdmin()) { <a clrDropdownItem routerLink="/vault"><cds-icon shape="key"></cds-icon> Vault</a> }
+            <a clrDropdownItem routerLink="/settings"><cds-icon shape="cog"></cds-icon> Settings</a>
+            <button clrDropdownItem (click)="toggleTheme()">
+              <cds-icon [shape]="prefs.effectiveTheme() === 'dark' ? 'sun' : 'moon'"></cds-icon>
+              {{ prefs.effectiveTheme() === 'dark' ? 'Light theme' : 'Dark theme' }}
+            </button>
+            <div class="dropdown-divider" role="separator"></div>
+            <button clrDropdownItem (click)="auth.logout()"><cds-icon shape="logout"></cds-icon> Log out</button>
+          </clr-dropdown-menu>
+        </clr-dropdown>
+      </div>
+    </header>
+
+    <div class="content-container">
+      <clr-vertical-nav [clrVerticalNavCollapsible]="true" [(clrVerticalNavCollapsed)]="navCollapsed">
+        <a clrVerticalNavLink routerLink="/dashboard" routerLinkActive="active">
+          <cds-icon clrVerticalNavIcon shape="dashboard"></cds-icon> Dashboard
+        </a>
+        <a clrVerticalNavLink routerLink="/devices" routerLinkActive="active">
+          <cds-icon clrVerticalNavIcon shape="router"></cds-icon> Devices
+          @if (down().length) { <span class="badge badge-danger">{{ down().length }}</span> }
+        </a>
+        @if (feat('backups')) {
+          <a clrVerticalNavLink routerLink="/backups" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="backup"></cds-icon> Backups
+          </a>
+        }
+        <a clrVerticalNavLink routerLink="/alerts" routerLinkActive="active" (click)="alerts.markSeen()">
+          <cds-icon clrVerticalNavIcon shape="bell"></cds-icon> Alerts
+          @if (alerts.unseen()) { <span class="badge badge-danger">{{ alerts.unseen() }}</span> }
+        </a>
+        @if (feat('security')) {
+          <a clrVerticalNavLink routerLink="/security" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="shield"></cds-icon> Security
+            @if (criticalFindings()) { <span class="badge badge-danger">{{ criticalFindings() }}</span> }
+          </a>
+        }
+        @if (postureOn()) {
+          <a clrVerticalNavLink routerLink="/posture" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="certificate"></cds-icon> Posture
+          </a>
+        }
+        @if (feat('dns')) {
+          <a clrVerticalNavLink routerLink="/dns" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="block"></cds-icon> DNS
+          </a>
+        }
+        @if (feat('timeline')) {
+          <a clrVerticalNavLink routerLink="/timeline" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="clock"></cds-icon> Timeline
+          </a>
+        }
+        @if (feat('map')) {
+          <a clrVerticalNavLink routerLink="/map" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="network-globe"></cds-icon> Map
+          </a>
+        }
+        @if (feat('wifi')) {
+          <a clrVerticalNavLink routerLink="/wifi" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="wifi"></cds-icon> Wi-Fi
+          </a>
+        }
+        @if (feat('metrics')) {
+          <a clrVerticalNavLink routerLink="/metrics" routerLinkActive="active">
+            <cds-icon clrVerticalNavIcon shape="line-chart"></cds-icon> Metrics
+          </a>
+        }
+        <div class="nav-divider"></div>
+        <a clrVerticalNavLink routerLink="/family" routerLinkActive="active">
+          <cds-icon clrVerticalNavIcon shape="home"></cds-icon> Family view
+        </a>
+        <a clrVerticalNavLink routerLink="/features" routerLinkActive="active">
+          <cds-icon clrVerticalNavIcon shape="switch"></cds-icon> Features
+        </a>
+        <a clrVerticalNavLink routerLink="/settings" routerLinkActive="active">
+          <cds-icon clrVerticalNavIcon shape="cog"></cds-icon> Settings
+        </a>
+      </clr-vertical-nav>
+
+      <main class="content-area">
+        <router-outlet />
+      </main>
+    </div>
+  </div>
+} @else {
+  <router-outlet />
+}

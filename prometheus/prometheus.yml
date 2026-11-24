@@ -1,0 +1,44 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  # Device status, check latency and backup state from the NetOps backend.
+  - job_name: netops
+    static_configs:
+      - targets: ["backend:8000"]
+
+  # The Docker host itself.
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # Detailed MikroTik metrics (only when the mktxp profile runs).
+  - job_name: mikrotik
+    scrape_interval: 60s
+    static_configs:
+      - targets: ["mktxp:49090"]
+
+  # Internet reachability and latency, measured from inside the LAN.
+  - job_name: internet
+    metrics_path: /probe
+    params: { module: [icmp] }
+    static_configs:
+      - targets: ["1.1.1.1", "9.9.9.9", "init7.net"]
+        labels: { probe: internet }
+      - targets: ["192.168.8.1", "172.16.1.1"]
+        labels: { probe: gateway }
+    relabel_configs: &blackbox
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: websites
+    metrics_path: /probe
+    params: { module: [http_2xx] }
+    static_configs:
+      - targets: ["https://www.init7.net", "https://www.google.com"]
+    relabel_configs: *blackbox

@@ -1,0 +1,43 @@
+---
+# STIG rules the appliance doesn't apply. Grouped by reason; each group is a row in DEVIATIONS.md.
+stig_deselect:
+  # Host firewall is nftables (Docker-compatible) instead of UFW
+  - package_ufw_installed
+  - check_ufw_active
+  - ufw_only_required_services
+  - ufw_rate_limit
+  # No smartcards / DoD PKI: SSH keys and local accounts
+  - install_smartcard_packages
+  - package_opensc_installed
+  - smartcard_configure_ca
+  - smartcard_configure_cert_checking
+  - smartcard_configure_crl
+  - smartcard_pam_enabled
+  - only_allow_dod_certs
+  - package_sssd_installed
+  - package_nss_sss_installed
+  - package_pam_sss_installed
+  - service_sssd_enabled
+  - sssd_certification_path_trust_anchor
+  - sssd_enable_pam_services
+  - sssd_enable_smartcards
+  - sssd_enable_user_cert
+  - sssd_offline_cred_expiration
+  # FIPS mode and full-disk encryption
+  - is_fips_mode_enabled
+  - encrypt_partitions
+  # Unattended appliance: no boot-loader password
+  - grub2_password
+  - grub2_uefi_password
+  # No central log server (optional later)
+  - auditd_audispd_configure_remote_server
+  - auditd_offload_logs
+  - rsyslog_remote_access_monitoring
+  # DoD-specific banner text
+  - banner_etc_issue_net
+  - banner_etc_profiled_ssh_confirm
+  # Radios are disabled in firmware on the Pi (base role); the STIG fix needs NetworkManager
+  - wireless_disable_interfaces
+
+stig_profile: xccdf_netops_profile_stig_appliance
+ssg_datastream: /usr/share/netops/ssg/ssg-ubuntu2404-ds.xml

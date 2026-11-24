@@ -1,0 +1,17 @@
+---
+# Directories for the stack. The backend container runs as UID {{ netops_uid }}; data and secrets belong to it.
+
+- name: NetOps directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ netops_dir }}", owner: "0", mode: "0755" }
+    - { path: "{{ netops_dir }}/data", owner: "{{ netops_uid }}", mode: "0700" }
+    - { path: "{{ netops_dir }}/data/compliance", owner: "{{ netops_uid }}", mode: "0700" }
+    - { path: "{{ netops_dir }}/secrets", owner: "{{ netops_uid }}", mode: "0700" }
+    - { path: "{{ netops_dir }}/certs", owner: "0", mode: "0750" }
+    - { path: /etc/netops, owner: "0", mode: "0750" }

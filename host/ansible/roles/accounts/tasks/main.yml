@@ -1,0 +1,25 @@
+---
+# Password quality, lockout, aging, hashing and shell timeouts come from the STIG remediation (compliance role).
+# This role adds what the STIG profile doesn't cover (CIS 5.2) and locks root.
+
+- name: Sudo — log to a file, use a pty, short credential cache
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/60-netops
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+    content: |
+      Defaults use_pty
+      Defaults logfile="/var/log/sudo.log"
+      Defaults timestamp_timeout={{ sudo_timestamp_timeout }}
+      Defaults !visiblepw
+
+- name: The admin user needs a password before the STIG removes passwordless sudo
+  ansible.builtin.command: "passwd --status {{ admin_user }}"
+  register: accounts_pw
+  changed_when: false
+  failed_when: accounts_pw.stdout.split()[1] | default('') != 'P'
+
+- name: Lock the root password (log in as the admin user, then sudo)
+  ansible.builtin.user:
+    name: root
+    password_lock: true

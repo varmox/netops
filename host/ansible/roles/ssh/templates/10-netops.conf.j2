@@ -1,0 +1,22 @@
+# Managed by the NetOps host playbook.
+# Ciphers, MACs, KEX, PAM, banner, idle timeout, X11 and user environment are set by the STIG remediation
+# (00-complianceascode-*.conf, read first); this file holds what the STIG leaves open.
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+AuthenticationMethods publickey
+AllowUsers {{ admin_user }}
+IgnoreRhosts yes
+HostbasedAuthentication no
+
+LoginGraceTime 60
+MaxAuthTries 4
+MaxSessions 4
+MaxStartups 10:30:60
+
+AllowAgentForwarding no
+AllowTcpForwarding no
+PermitTunnel no
+GatewayPorts no
+
+LogLevel VERBOSE

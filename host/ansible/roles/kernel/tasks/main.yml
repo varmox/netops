@@ -1,0 +1,28 @@
+---
+# Kernel parameters, unused kernel modules, AppArmor (DISA STIG, CIS 1.x / 3.x).
+
+- name: Hardened kernel parameters
+  ansible.builtin.template:
+    src: 60-netops.conf.j2
+    dest: /etc/sysctl.d/60-netops.conf
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Unused filesystems and protocols can't be loaded
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/60-netops.conf
+    mode: "0644"
+    content: |
+      # Managed by the NetOps host playbook. usb-storage/uas stay available: the backup disk needs them.
+      {% for m in ['cramfs', 'freevxfs', 'hfs', 'hfsplus', 'jffs2', 'udf',
+                   'dccp', 'sctp', 'rds', 'tipc', 'firewire-core', 'firewire-ohci', 'bluetooth', 'btusb'] %}
+      install {{ m }} /bin/false
+      blacklist {{ m }}
+      {% endfor %}
+
+- name: AppArmor must be enabled
+  ansible.builtin.command: aa-enabled
+  register: kernel_aa
+  changed_when: false
+  failed_when: kernel_aa.stdout.strip() != "Yes"
+  tags: [services]

@@ -1,0 +1,27 @@
+# Copy to mktxp.conf (git-ignored). Needs a read-only RouterOS user with the "api" policy, see README.
+[MikroTik]
+    enabled = True
+    hostname = 192.168.8.1
+    port = 8728
+    username = mktxp
+    password = change-me
+    use_ssl = False
+    no_ssl_certificate = True
+    ssl_certificate_verify = False
+
+    # what to collect (mktxp defaults otherwise)
+    dhcp = True
+    dhcp_lease = True
+    connections = True
+    pool = True
+    interface = True
+    firewall = True
+    ipv6_firewall = True
+    route = True
+    wireless = True
+    wireless_clients = True
+    capsman = False
+    netwatch = True
+    public_ip = True
+    health = True
+    installed_packages = True

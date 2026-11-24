@@ -1,0 +1,12 @@
+## NetOps appliance: watches for the stack's own configuration. The STIG audit rules (identity, privileged
+## commands, syscalls, immutability) are written by the STIG remediation into their own files.
+-w /etc/ssh/sshd_config -p wa -k sshd
+-w /etc/ssh/sshd_config.d/ -p wa -k sshd
+-w /etc/netops/ -p wa -k netops
+-w /opt/netops/docker-compose.yml -p wa -k netops
+-w /etc/docker/ -p wa -k docker
+-w /usr/bin/dockerd -p x -k docker
+-w /usr/bin/containerd -p x -k docker
+-w /usr/lib/systemd/system/docker.service -p wa -k docker
+-w /usr/lib/systemd/system/docker.socket -p wa -k docker
+-w /usr/local/bin/cosign -p x -k supply-chain

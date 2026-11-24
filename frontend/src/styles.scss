@@ -1,0 +1,154 @@
+/* Clarity's own CSS is loaded from angular.json; these are app-wide additions. */
+html,
+body {
+  height: 100%;
+}
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+
+  h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    line-height: 1.2;
+  }
+}
+
+/* Consistent heading rhythm for page content (not the login/setup screens). */
+.content-area {
+  h3 {
+    margin: 1.5rem 0 0.6rem;
+    font-size: 1.05rem;
+    font-weight: 600;
+  }
+
+  h4 {
+    margin: 1rem 0 0.5rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  > p:first-of-type.muted {
+    margin-top: -0.3rem;
+  }
+}
+
+/* Secondary text: a real low-contrast colour (not washed-out opacity over whatever is behind it). */
+.muted {
+  color: var(--clr-color-neutral-600, #666);
+}
+
+body[cds-theme="dark"] .muted {
+  color: var(--clr-color-neutral-500, #9aa5ad);
+}
+
+/* An intro/help paragraph directly under a page/section heading gets comfortable reading width + spacing. */
+.content-area > p.muted,
+.content-area .sec > p.muted {
+  max-width: 68ch;
+  line-height: 1.5;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+}
+
+/* Shared KPI "stat" card — one scale everywhere (dashboard, device, DNS, posture, map, family).
+   Cards fill their column to equal height and the optional progress bar sits at the bottom, so a row of
+   them lines up even when one label wraps to two lines. */
+.card.stat {
+  height: calc(100% - 1rem);
+
+  .card-block {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 0.9rem 1rem;
+  }
+
+  .n {
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.1;
+
+    small {
+      font-size: 0.85rem;
+      font-weight: 400;
+      opacity: 0.6;
+    }
+  }
+
+  .l {
+    font-size: 0.8rem;
+    color: var(--clr-color-neutral-600, #666);
+    margin-top: 0.3rem;
+    line-height: 1.35;
+  }
+
+  clr-progress-bar {
+    display: block;
+    margin-top: auto;      /* pin to the bottom so bars align across the row */
+    padding-top: 0.7rem;
+  }
+}
+
+body[cds-theme="dark"] .card.stat .l {
+  color: var(--clr-color-neutral-500, #9aa5ad);
+}
+
+/* A value that needs attention. */
+.bad { color: var(--clr-color-danger-700, #c92100); font-weight: 600; }
+
+/* Table alignment helpers used across pages. */
+.left { text-align: left; }
+.right { text-align: right; }
+
+/* Datagrids and tables get a little breathing room below a heading. */
+clr-datagrid { margin-top: 0.4rem; }
+
+.table.table-compact td,
+.table.table-compact th { vertical-align: middle; }
+
+/* Inline legend (map, posture). */
+.legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 0.3rem 0 0.8rem;
+  font-size: 0.8rem;
+  color: var(--clr-color-neutral-600, #666);
+
+  .dot {
+    display: inline-block;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    margin-right: 0.3rem;
+    vertical-align: baseline;
+  }
+}
+
+pre.config {
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  white-space: pre;
+  margin: 0;
+}
+
+.diff-add { color: #2f8400; }
+.diff-del { color: #c92100; }
+.diff-hunk { color: #0079b8; }
+
+body[cds-theme="dark"] {
+  .diff-add { color: #7fd36b; }
+  .diff-del { color: #ff8a80; }
+  .diff-hunk { color: #6ccfff; }
+}

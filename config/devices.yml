@@ -1,0 +1,100 @@
+# Irrenhaus LAN: every device NetOps watches, and how to back up its config.
+# Checks: ping | {tcp: <port>} | {http: <url>}. A device is "down" after FAILS_BEFORE_DOWN rounds with every
+# check failing, and "degraded" when only some fail. Secrets never go here: backup credentials come from
+# files in /secrets or environment variables from .env.
+# software: products checked against CISA KEV and NVD (CPE vendor:product; version fixed, or read from the
+# latest backup with version_from). protected: true = never quarantined by the security remediation.
+# alert: whether a down/degraded device pushes a notification. Omit it and only infrastructure (protected:
+# true) pages you — a TV or phone dropping off is normal and stays silent, still tracked for uptime. Set
+# `alert: true` to force paging on any device, or `alert: false` to mute an infrastructure device.
+
+devices:
+  - id: mikrotik
+    name: MikroTik hAP ax³
+    type: mikrotik
+    role: Main router · Wi-Fi · firewall
+    host: 192.168.8.1
+    checks: [ping, {tcp: 22}, {http: "http://192.168.8.1/"}]
+    backup:
+      method: mikrotik-ssh
+      user: claude                     # better: a dedicated read-only "netops" user (see README)
+      key: /secrets/mikrotik_id_rsa
+      binary: false                    # true: also save and download a binary /system backup
+    links:
+      WebFig: http://192.168.8.1/
+    facts:
+      Model: C53UiG+5HPaxD2HPaxD
+      RouterOS: 7.25.2
+      LAN: 192.168.8.0/24
+      WAN: ether1 → Zyxel (172.16.1.5)
+    protected: true                    # never quarantined
+    software:
+      - { name: RouterOS, cpe: "cpe:2.3:o:mikrotik:routeros", version_from: mikrotik }
+
+  - id: zyxel
+    name: Zyxel GM4100-B0
+    type: zyxel
+    role: VDSL modem-router · Init7 PPPoE
+    host: 172.16.1.1
+    checks: [ping, {http: "https://172.16.1.1/"}, {tcp: 22}]   # LAN management: SSH + HTTPS only
+    backup:
+      method: zyxel-zcfg
+      user_env: ZYXEL_USER
+      password_env: ZYXEL_PASSWORD
+      redact: true                     # passwords and keys in the snapshot become <redacted>
+      scheme: https                    # the Zyxel's web GUI is HTTPS-only (self-signed)
+    links:
+      Web GUI: https://172.16.1.1/
+    facts:
+      Firmware: V5.18(ACCL.0)b8
+      ISP: Init7 · VDSL 406/75 Mbit
+      LAN: 172.16.1.0/24
+    protected: true
+    software:
+      - { name: GM4100-B0 firmware, cpe: "cpe:2.3:o:zyxel:gm4100-b0_firmware", version_from: zyxel }
+
+  - id: velocloud
+    name: VeloCloud edge
+    type: generic
+    role: Work SD-WAN edge (not managed here)
+    host: 172.16.1.2
+    checks: [ping]
+    notes: WAN on Zyxel GE4 plus 5G. A LAN port is cabled into MikroTik ether2; DHCP snooping blocks its DHCP.
+    protected: true                    # work device, not ours to quarantine
+
+  - id: lg-tv
+    name: LG TV
+    type: generic
+    role: webOS TV · Free My TV
+    host: 192.168.8.248
+    checks: [ping, {tcp: 3000}]
+    notes: Developer Mode renewed weekly from Yannicks-Air. Weak Wi-Fi (−75 dBm).
+    software:
+      - { name: webOS, cpe: "cpe:2.3:o:lg:webos" }          # version unknown: only actively exploited CVEs are reported
+
+  - id: hue
+    name: Hue bridge
+    type: generic
+    role: Smart lighting (wired, ether3)
+    host: 192.168.8.235
+    checks: [ping, {http: "http://192.168.8.235/"}]
+    software:
+      - { name: Hue bridge v2 firmware, cpe: "cpe:2.3:o:philips:hue_bridge_v2_firmware" }
+
+  - id: harbor
+    name: Harbor registry
+    type: generic
+    role: Internal image registry (self-built images, scan on push)
+    host: 192.168.8.226                # the Docker host; port 8880
+    checks: [{http: "http://192.168.8.226:8880/api/v2.0/ping"}]
+    protected: true
+    links:
+      Harbor: http://192.168.8.226:8880/
+
+  - id: netops-host
+    name: NetOps host
+    type: generic
+    role: Docker host running this stack
+    host: 192.168.8.226                # the Mac for now; the mini PC (192.168.8.10) later
+    checks: [ping]
+    protected: true

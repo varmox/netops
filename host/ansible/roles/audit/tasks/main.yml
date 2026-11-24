@@ -1,0 +1,47 @@
+---
+# auditd with STIG-style rules (identity, privilege use, time, modules, mounts, permission changes).
+
+- name: Auditd installed
+  ansible.builtin.apt:
+    name: [auditd, audispd-plugins]
+    state: present
+
+- name: Audit rules
+  ansible.builtin.copy:
+    src: 60-netops.rules
+    dest: /etc/audit/rules.d/60-netops.rules
+    mode: "0640"
+  notify: Load audit rules
+
+- name: Audit log size and actions (an appliance must not halt on a full log; see DEVIATIONS.md)
+  ansible.builtin.lineinfile:
+    path: /etc/audit/auditd.conf
+    regexp: "^{{ item.key }}\\s*="
+    line: "{{ item.key }} = {{ item.value }}"
+  loop:
+    - { key: max_log_file, value: "25" }
+    - { key: num_logs, value: "8" }
+    - { key: max_log_file_action, value: "rotate" }
+    - { key: space_left, value: "25%" }          # same values the tailored STIG sets
+    - { key: space_left_action, value: "syslog" }
+    - { key: admin_space_left, value: "10%" }
+    - { key: admin_space_left_action, value: "syslog" }
+    - { key: disk_full_action, value: "rotate" }
+    - { key: log_group, value: "root" }
+  notify: Restart auditd
+
+- name: Audit from early boot (kernel parameters on the Pi)
+  ansible.builtin.replace:
+    path: /boot/firmware/cmdline.txt
+    regexp: '^((?!.*\baudit=1\b).*)$'
+    replace: '\1 audit=1 audit_backlog_limit=8192'
+  when: ansible_architecture == "aarch64"
+  failed_when: false
+  tags: [pi]
+
+- name: Auditd running
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+  tags: [services]

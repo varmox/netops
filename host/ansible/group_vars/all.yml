@@ -1,0 +1,62 @@
+---
+# --- Network ---------------------------------------------------------------------------------------
+# Who may reach the box. Everything else is dropped.
+lan_cidrs_v4: ["192.168.8.0/24"]
+lan_cidrs_v6: []                         # e.g. your LAN's /64 once IPv6 is routed
+admin_user: "{{ ansible_user }}"         # SSH key login, sudo with password
+
+# Ports the NetOps containers publish (restricted to the LAN by the firewall's forward rule).
+netops_published_ports: [80, 443, 8090, 2222]
+
+# --- Time ------------------------------------------------------------------------------------------
+timezone: Europe/Zurich
+chrony_servers:                          # NTS-authenticated first, then the public pool
+  - "time.cloudflare.com iburst nts"
+  - "ptbtime1.ptb.de iburst nts"
+chrony_pools:
+  - "ch.pool.ntp.org iburst maxsources 2"
+
+# --- Accounts -------------------------------------------------------------------------------------
+sudo_timestamp_timeout: 5
+# Lockout, password rules and shell timeouts come from the STIG (see compliance below).
+
+# --- Packages --------------------------------------------------------------------------------------
+remove_packages:
+  - avahi-daemon
+  - cups
+  - cups-daemon
+  - bluez
+  - telnet
+  - inetutils-telnet
+  - rsh-client
+  - ftp
+  - tnftp
+  - nis
+  - talk
+  - xinetd
+  - rpcbind
+  - modemmanager
+remove_snapd: true
+
+# --- Raspberry Pi ----------------------------------------------------------------------------------
+pi_disable_wifi: true                    # wired appliance
+pi_disable_bluetooth: true
+
+# --- Tools (pinned, checksum-verified) -------------------------------------------------------------
+cosign_version: v3.1.4
+cosign_sha256:
+  arm64: ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
+  amd64: 424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+ssg_version: "0.1.82"
+ssg_sha512: "1caea418f0a5aaef7025e1655ca45a80942ea87ee832b943644ba6f9991b14a6ac5b35dddcd04b754e1fc8fbdee7b7f394507d24b123e821cca0354dc4e03cfd"
+
+# --- Compliance ------------------------------------------------------------------------------------
+# The DISA STIG is applied by SSG's own remediation, through a tailoring file (roles/compliance/templates/
+# tailoring.xml.j2) that deselects the deviations in DEVIATIONS.md. CIS Level 1 Server is reported only.
+stig_remediate: true
+stig_faillock_unlock_time: 900           # STIG: never (0) — see DEVIATIONS.md
+stig_extra_deselect: []                  # rule ids (without the xccdf prefix) you want to skip as well
+
+# --- NetOps ----------------------------------------------------------------------------------------
+netops_dir: /opt/netops
+netops_uid: 10001                        # the backend container's user

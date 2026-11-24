@@ -1,0 +1,46 @@
+---
+# Tools the appliance needs on the host, pinned and checksum-verified where they don't come from Ubuntu.
+
+- name: Backup, disk and compliance tools from Ubuntu
+  ansible.builtin.apt:
+    name: [restic, cryptsetup, smartmontools, openscap-scanner]
+    state: present
+
+- name: Cosign (verifies image signatures before every update)
+  ansible.builtin.get_url:
+    url: "https://github.com/sigstore/cosign/releases/download/{{ cosign_version }}/cosign-linux-{{ arch }}"
+    dest: /usr/local/bin/cosign
+    mode: "0755"
+    checksum: "sha256:{{ cosign_sha256[arch] }}"
+  vars:
+    arch: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+
+- name: SCAP Security Guide content
+  ansible.builtin.get_url:
+    url: "https://github.com/ComplianceAsCode/content/releases/download/v{{ ssg_version }}/scap-security-guide-{{ ssg_version }}.zip"
+    dest: "/var/cache/netops-ssg-{{ ssg_version }}.zip"
+    mode: "0644"
+    checksum: "sha512:{{ ssg_sha512 }}"
+
+- name: SSG directory
+  ansible.builtin.file:
+    path: /usr/share/netops/ssg
+    state: directory
+    mode: "0755"
+
+- name: Only the Ubuntu 24.04 datastream is needed
+  ansible.builtin.unarchive:
+    src: "/var/cache/netops-ssg-{{ ssg_version }}.zip"
+    dest: /usr/share/netops/ssg
+    remote_src: true
+    include: ["scap-security-guide-{{ ssg_version }}/ssg-ubuntu2404-ds.xml"]
+    extra_opts: ["-j"]
+    creates: /usr/share/netops/ssg/ssg-ubuntu2404-ds.xml
+
+- name: Smart monitoring of the SSD and the backup disk
+  ansible.builtin.systemd_service:
+    name: smartmontools
+    enabled: true
+    state: started
+  failed_when: false
+  tags: [services]

@@ -1,0 +1,8 @@
+# ntfy: alert channel for the web UI and phones (http://<minipc>:8090/<NTFY_TOPIC>).
+# LAN only. To lock it down, set auth-default-access: deny-all, create a user with `ntfy user add`,
+# and give the backend a token (NTFY_TOKEN).
+base-url: http://netops.lan:8090
+cache-file: /var/cache/ntfy/cache.db
+cache-duration: 72h
+behind-proxy: true
+auth-default-access: read-write

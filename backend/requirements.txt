@@ -1,0 +1,12 @@
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+httpx==0.28.1
+pyyaml==6.0.4
+asyncssh==2.24.1
+prometheus-client==0.26.0
+cryptography==50.0.2
+argon2-cffi==25.1.0
+pyotp==2.12.1
+webauthn==3.0.1
+pynacl==1.6.2
+segno==1.6.6

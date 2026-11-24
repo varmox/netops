@@ -1,0 +1,110 @@
+apiVersion: 1
+
+# Grafana alerts go to the NetOps backend, which turns them into readable ntfy messages.
+contactPoints:
+  - orgId: 1
+    name: netops-ntfy
+    receivers:
+      - uid: netops-webhook
+        type: webhook
+        settings:
+          url: http://backend:8000/api/hooks/grafana
+          httpMethod: POST
+
+policies:
+  - orgId: 1
+    receiver: netops-ntfy
+    group_by: [alertname]
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 12h
+
+groups:
+  - orgId: 1
+    name: netops
+    folder: NetOps
+    interval: 1m
+    rules:
+      - uid: internet-down
+        title: Internet down
+        condition: C
+        for: 2m
+        labels: { severity: critical }
+        annotations: { summary: "None of 1.1.1.1, 9.9.9.9 and init7.net answer pings from the LAN." }
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max(probe_success{probe="internet"})' }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [ { evaluator: { type: lt, params: [1] } } ]
+
+      - uid: backup-stale
+        title: Config backup older than 2 days
+        condition: C
+        for: 1h
+        labels: { severity: warning }
+        annotations: { summary: "No successful config backup for {{ $labels.device }} in over 48 hours." }
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'time() - netops_backup_last_success_timestamp' }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [ { evaluator: { type: gt, params: [172800] } } ]
+
+      - uid: mikrotik-cpu-high
+        title: MikroTik CPU high
+        condition: C
+        for: 10m
+        labels: { severity: warning, device: mikrotik }
+        annotations: { summary: "MikroTik CPU load above 80% for 10 minutes." }
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max(mktxp_system_cpu_load)' }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [ { evaluator: { type: gt, params: [80] } } ]
+
+      - uid: mikrotik-temp-high
+        title: MikroTik too hot
+        condition: C
+        for: 10m
+        labels: { severity: warning, device: mikrotik }
+        annotations: { summary: "MikroTik CPU temperature above 80 °C for 10 minutes." }
+        noDataState: OK
+        execErrState: Error
+        data:
+          - refId: A
+            relativeTimeRange: { from: 300, to: 0 }
+            datasourceUid: prometheus
+            model: { refId: A, instant: true, expr: 'max(mktxp_system_cpu_temperature)' }
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: A
+              conditions: [ { evaluator: { type: gt, params: [80] } } ]

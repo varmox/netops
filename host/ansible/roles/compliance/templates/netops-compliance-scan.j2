@@ -1,0 +1,36 @@
+#!/bin/sh
+# Managed by the NetOps host playbook. Evaluates the host against the tailored DISA STIG and CIS Level 1
+# Server; HTML reports, ARF results and summary.json go to the directory the NetOps UI reads.
+# oscap exits 2 when rules fail; that is a result, not an error.
+set -u
+DS={{ ssg_datastream }}
+OUT={{ netops_dir }}/data/compliance
+KEEP=12
+stamp=$(date +%Y%m%d)
+summary="{\"date\": \"$(date -Is)\", \"ssg\": \"{{ ssg_version }}\", \"profiles\": {"
+sep=""
+scan() {  # name, oscap profile arguments...
+  name=$1; shift
+  oscap xccdf eval "$@" --results-arf "$OUT/$name-$stamp-arf.xml" --report "$OUT/$name-$stamp.html" "$DS" \
+    > "$OUT/.$name.out" 2>/dev/null
+  rc=$?
+  [ "$rc" -gt 2 ] && echo "oscap failed for $name (exit $rc)" >&2
+  ln -sf "$name-$stamp.html" "$OUT/$name-latest.html"
+  counts=""
+  for r in pass fail error notapplicable notchecked; do
+    n=$(grep -c "^Result[[:space:]]*$r\$" "$OUT/.$name.out")
+    counts="$counts\"$r\": $n, "
+  done
+  summary="$summary$sep\"$name\": {${counts%, }}"
+  sep=", "
+  rm -f "$OUT/.$name.out"
+  # keep the newest $KEEP runs of each profile
+  ls -1t "$OUT/$name"-2*.html 2>/dev/null | tail -n +$((KEEP + 1)) | while read -r f; do
+    rm -f "$f" "${f%.html}-arf.xml"
+  done
+}
+scan stig --tailoring-file /etc/netops/stig-tailoring.xml --profile {{ stig_profile }}
+scan cis_level1_server --profile xccdf_org.ssgproject.content_profile_cis_level1_server
+echo "$summary}}" > "$OUT/summary.json"
+chown -R {{ netops_uid }}:{{ netops_uid }} "$OUT"
+chmod -R go-rwx "$OUT"

@@ -1,0 +1,23 @@
+.env
+secrets/*
+!secrets/README.md
+mktxp/mktxp.conf
+sftp/keys/*.pub
+certs/*
+harbor/harbor/
+harbor/data/
+harbor/.db_password
+harbor/md5sum
+harbor/*.tgz
+# runtime data: backups, findings, session secret, vault, certificates, Harbor
+data/
+harbor/data/
+certs/*
+!certs/.gitkeep
+secrets/*
+!secrets/README.md
+*.keystore
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+__pycache__/

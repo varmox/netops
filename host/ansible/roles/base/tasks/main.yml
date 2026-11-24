@@ -1,0 +1,146 @@
+---
+# Packages, time, logging, login banner, automatic security updates, core dumps, Raspberry Pi radios.
+
+- name: Finish package installs interrupted earlier (e.g. power loss during unattended-upgrades)
+  ansible.builtin.command: dpkg --configure -a
+  register: base_dpkg
+  changed_when: base_dpkg.stdout | length > 0
+
+- name: Update the package cache and install pending updates
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: safe
+    cache_valid_time: 3600
+
+- name: Remove services an appliance doesn't need (CIS 2.x, STIG "unnecessary services")
+  ansible.builtin.apt:
+    name: "{{ remove_packages }}"
+    state: absent
+    purge: true
+
+- name: Remove snapd (nothing on the appliance uses snaps)
+  ansible.builtin.apt:
+    name: snapd
+    state: absent
+    purge: true
+  when: remove_snapd
+
+- name: Install the base tools
+  ansible.builtin.apt:
+    name:
+      - openssh-server
+      - sudo
+      - chrony
+      - unattended-upgrades
+      - needrestart
+      - libpam-pwquality
+      - apparmor
+      - apparmor-utils
+      - smartmontools
+      - cryptsetup
+      - ca-certificates
+      - curl
+      - gnupg
+      - unzip
+      - bzip2
+    state: present
+
+- name: Drop-in directories the later tasks write to
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "{{ '0750' if item == '/etc/netops' else '0755' }}"
+  loop:
+    - /etc/systemd/journald.conf.d
+    - /etc/systemd/coredump.conf.d
+    - /etc/security/pwquality.conf.d
+    - /etc/apt/keyrings
+    - /etc/netops
+
+- name: Read the time zone
+  ansible.builtin.command: timedatectl show -p Timezone --value
+  register: base_tz_now
+  changed_when: false
+  tags: [services]
+
+- name: Time zone
+  ansible.builtin.command: "timedatectl set-timezone {{ timezone }}"
+  when: base_tz_now.stdout != timezone
+  changed_when: true
+  tags: [services]
+
+- name: Chrony with NTS-authenticated servers
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    mode: "0644"
+  notify: Restart chrony
+
+- name: Persistent, size-capped journal
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/60-netops.conf
+    mode: "0644"
+    content: |
+      [Journal]
+      Storage=persistent
+      Compress=yes
+      SystemMaxUse=500M
+  notify: Restart journald
+
+- name: Login banner (local, SSH)
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    mode: "0644"
+    content: |
+      Authorized use only. This system is monitored; activity is logged and may be reviewed.
+  loop: [/etc/issue, /etc/issue.net]
+
+- name: Quiet message of the day (no system details before login)
+  ansible.builtin.file:
+    path: "/etc/update-motd.d/{{ item }}"
+    mode: "0644"
+  loop: [10-help-text, 50-motd-news]
+  failed_when: false
+
+- name: Automatic security updates, with a reboot window
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/52netops-unattended
+    mode: "0644"
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+        "Docker:${distro_codename}";
+      };
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::AutocleanInterval "7";
+
+- name: No core dumps (STIG, CIS 1.5)
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/60-netops-nocore.conf
+    mode: "0644"
+    content: "* hard core 0\n"
+
+- name: Systemd-coredump stores nothing
+  ansible.builtin.copy:
+    dest: /etc/systemd/coredump.conf.d/60-netops.conf
+    mode: "0644"
+    content: "[Coredump]\nStorage=none\nProcessSizeMax=0\n"
+
+- name: Raspberry Pi — turn off Wi-Fi and Bluetooth radios (wired appliance)
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    line: "dtoverlay={{ item.overlay }}"
+    insertafter: EOF
+  loop:
+    - { overlay: disable-wifi, enabled: "{{ pi_disable_wifi }}" }
+    - { overlay: disable-bt, enabled: "{{ pi_disable_bluetooth }}" }
+  when: item.enabled and ansible_architecture == "aarch64"
+  register: base_pi_overlays
+  failed_when: false
+  tags: [pi]

@@ -1,0 +1,14 @@
+# Managed by the NetOps host playbook.
+{% for s in chrony_servers %}
+server {{ s }} maxpoll 16
+{% endfor %}
+{% for p in chrony_pools %}
+pool {{ p }} maxpoll 16
+{% endfor %}
+ntsdumpdir /var/lib/chrony
+driftfile /var/lib/chrony/chrony.drift
+makestep 1 3
+rtcsync
+# No NTP server for others: client only.
+port 0
+cmdport 0

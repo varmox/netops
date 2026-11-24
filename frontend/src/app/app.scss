@@ -1,0 +1,49 @@
+.header .title {
+  white-space: nowrap;
+}
+
+.live {
+  align-self: center;
+  margin-right: 0.6rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
+
+  &::before {
+    content: "";
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-right: 0.35rem;
+    border-radius: 50%;
+    background: #c92100;
+  }
+
+  &.on::before {
+    background: #5eb715;
+  }
+}
+
+.user-btn {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 100%;
+  padding: 0 1rem;
+}
+
+.nav-divider {
+  border-top: 1px solid rgba(128, 128, 128, 0.25);
+  margin: 0.5rem 0;
+}
+
+@media (max-width: 576px) {
+  .live {
+    display: none;
+  }
+}

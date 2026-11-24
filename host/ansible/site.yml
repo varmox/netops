@@ -1,0 +1,36 @@
+---
+# NetOps appliance host: Ubuntu Server 24.04 LTS (arm64 on a Raspberry Pi 5, or amd64).
+# Play 1 sets up the appliance; play 2 applies the DISA STIG with SSG's remediation (tailored, see
+# DEVIATIONS.md) and schedules the OpenSCAP reports. Handlers of play 1 run before play 2, so the STIG
+# evaluates the final state.
+#
+#   ansible-playbook site.yml --ask-become-pass
+#   ansible-playbook site.yml --tags firewall               # one area
+#   ansible-playbook site.yml --tags compliance-now         # a new compliance report
+- name: Set up the NetOps host
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Refuse anything but Ubuntu 24.04
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_version == "24.04"
+        fail_msg: "This playbook targets Ubuntu Server 24.04 LTS (found {{ ansible_distribution }} {{ ansible_distribution_version }})."
+      tags: [always]
+  roles:
+    - { role: base, tags: [base] }
+    - { role: accounts, tags: [accounts] }
+    - { role: ssh, tags: [ssh] }
+    - { role: kernel, tags: [kernel] }
+    - { role: firewall, tags: [firewall] }
+    - { role: audit, tags: [audit] }
+    - { role: docker, tags: [docker] }
+    - { role: tools, tags: [tools] }
+    - { role: netops, tags: [netops] }
+
+- name: Apply the DISA STIG and schedule compliance reports
+  hosts: all
+  become: true
+  roles:
+    - { role: compliance, tags: [compliance] }
